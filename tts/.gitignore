@@ -1,0 +1,5 @@
+# modelli Piper (pesanti, si scaricano a parte: vedi README)
+voci/
+# file generati
+output/
+__pycache__/

@@ -1,0 +1,22 @@
+# nome_file | voce | testo | velocita (facoltativa, default 0.92)
+# Voci del README: ryan-high (AWACS/ATC), lessac-medium (pilota), ryan-medium
+# Numeri scritti come si pronunciano: "three four zero", "twenty thousand", "one one".
+# Guida alla fraseologia: FRASEOLOGIA.md
+
+# --- Check-in e picture ---
+viper11_request_picture | lessac-medium | Overlord, Viper one one, checking in, request picture.
+awacs_picture | ryan-high | Viper one one, Overlord. Picture, two groups, azimuth twelve. North group, bullseye three four zero, forty five, twenty thousand, track south, hostile. South group, bullseye three one five, thirty, low, track east, hostile, two contacts.
+awacs_picture_clean | ryan-high | Viper one one, Overlord, picture clean.
+
+# --- Allarmi e commit ---
+awacs_bogey_dope | ryan-high | Viper one one, Overlord, single group, BRAA three four zero, forty, twenty thousand, hot, hostile.
+awacs_pop_up | ryan-high | Overlord, pop up group, bullseye zero niner zero, twenty, low, hostile. | 0.85
+viper11_commit | lessac-medium | Viper one one, committing, north group.
+
+# --- Wingman ---
+viper12_engaged | lessac-medium | Viper one two, engaged, defensive, spike three o'clock! | 0.85
+viper12_splash | lessac-medium | Viper one two, splash one.
+viper12_bingo | lessac-medium | Viper one two, bingo fuel, R T B.
+
+# --- Fine missione ---
+awacs_rtb | ryan-high | Viper one one, Overlord, picture clean, cleared R T B, good hunting.
