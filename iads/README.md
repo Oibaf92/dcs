@@ -13,8 +13,9 @@ MOOSE, MIST o altri script.
   (`Controller:getDetectedTargets`): radar di sorveglianza, AWACS, osservatori a terra e SAM già
   accesi. Orizzonte radar e rilievo li calcola DCS: chi vola basso dietro una montagna non viene
   visto e non fa accendere niente.
-- **Ritardi.** L'allarme arriva alla batteria dopo 8 s; dall'AWACS solo il 70% delle tracce, con
-  20 s in più.
+- **Ritardi.** L'allarme arriva alla batteria dopo 8 s, più il ritardo del sensore che l'ha visto.
+  Ogni tipo di radar ha il suo profilo (vedi "Profili per tipo di radar"): un vecchio P-19 aggiunge
+  4 s; un E-2C passa il 70% delle tracce, con 20 s in più.
 - **Guida dei missili.** Dopo un lancio il radar resta acceso per il tempo di guida del sistema
   (SA-2 90 s, SA-3 60, SA-5 180, SA-6 60, SA-8 30, Hawk 60): niente missili persi perché la
   batteria si è spenta da sola.
@@ -22,9 +23,10 @@ MOOSE, MIST o altri script.
   Kh-25MP), la rete reagisce solo se in quel momento un suo radar vede l'aereo che lancia: un EWR,
   un SAM acceso o un AWACS (che passa l'informazione con probabilità 70%); gli osservatori a vista
   non contano. Chi lancia basso dietro il rilievo o fuori copertura non provoca reazioni. Spengono il
-  radar dopo 3-8 s le batterie minacciate: quella bersaglio con probabilità 65%, quelle accese entro
-  100 km davanti al lanciatore (±45° dalla prua) con probabilità 30%. Le batterie della coalizione
-  che lancia non reagiscono mai. Il silenzio dura 60-120 s.
+  radar dopo 3-8 s le batterie minacciate: quella bersaglio e quelle accese entro 100 km davanti al
+  lanciatore (±45° dalla prua), con una probabilità che dipende dal tipo di SAM (per esempio SA-2
+  75%/40%, SA-15 20%/10%; per i tipi non elencati 65%/30%). Le batterie della coalizione che lancia
+  non reagiscono mai. Il silenzio dura 60-120 s.
 - **Spostamento dopo il tiro.** I SAM mobili, 90 s dopo aver sparato, si spostano di 0,8-1,5 km
   fuori strada a radar spento, poi tornano operativi.
 - **Rete cieca.** Se tutti i sensori della coalizione sono distrutti, le batterie accendono il
@@ -55,7 +57,9 @@ dell'evento di lancio.
    L'ordine conta: la configurazione deve essere caricata prima di `iads.lua`. In alternativa la
    configurazione può stare in un'azione **DO SCRIPT** incollata direttamente.
 3. Salva e vola. Nel `dcs.log` deve comparire una riga per coalizione:
-   `[IADS] coalizione 1: N batterie, radar spenti`.
+   `[IADS] coalizione 1: N batterie, radar spenti`, e una riga per batteria e per sensore con il
+   profilo riconosciuto (`[IADS] SA-6 Bekaa: profilo Kub 1S91 str, ...`). "di riserva" vuol dire che
+   nessun tipo di unità del gruppo è nelle tabelle.
 
 Con `IADS_DEBUG = true` ogni accensione e spegnimento compare a schermo; i messaggi vanno sempre
 nel `dcs.log` con il prefisso `[IADS DEBUG]`.
@@ -66,9 +70,11 @@ IADS_DATI = {
   [1] = {                                   -- 1 = rossi, 2 = blu
     sam = {
       ["nome gruppo"] = { tipo = "sa6", portata = 25000, mobile = true, riserva = false },
+      -- facoltativi: p_harm = 0.6, p_vicine = 0.3   (vincono sul profilo del tipo)
     },
     sensori = {
       ["nome gruppo"] = "radar" | "awacs" | "vista",
+      -- oppure: ["nome gruppo"] = { ruolo = "awacs", p_passa = 0.6, ritardo = 25 }
     },
   },
 }
@@ -82,6 +88,43 @@ IADS_DATI = {
 | sensore `radar` | radar di sorveglianza (EWR), rilevamento radar |
 | sensore `awacs` | aereo radar, tracce passate in parte e in ritardo |
 | sensore `vista` | unità a terra (carri, contraerea, fanteria): rilevamento visivo e ottico |
+| `p_harm`, `p_vicine` | facoltativi: probabilità di silenzio della batteria, se bersaglio o minacciata |
+| sensore `p_passa`, `ritardo` | facoltativi (forma a tabella): probabilità che il dato arrivi alla rete e secondi in più |
+
+### Profili per tipo di radar
+Le probabilità dipendono dal tipo di unità DCS presente nel gruppo, letto con `getTypeName()`.
+Lo script prende il primo tipo del gruppo che compare nelle tabelle `PROFILI_SAM` e
+`PROFILI_SENSORI` in testa a `iads.lua`. Un valore scritto nella configurazione del gruppo vince
+sulla tabella; un tipo non elencato usa i valori di riserva.
+
+| SAM | Tipo DCS | Silenzio se bersaglio | Se minacciata |
+|---|---|---|---|
+| SA-2 | `SNR_75V` | 0.75 | 0.40 |
+| SA-3 | `snr s-125 tr` | 0.70 | 0.35 |
+| SA-5 | `RPC_5N62V` | 0.50 | 0.25 |
+| SA-6 | `Kub 1S91 str` | 0.60 | 0.30 |
+| SA-8 | `Osa 9A33 ln` | 0.40 | 0.20 |
+| SA-11 | `SA-11 Buk SR 9S18M1`, `SA-11 Buk LN 9A310M1` | 0.50 | 0.25 |
+| SA-10 | `S-300PS 40B6M tr` | 0.40 | 0.15 |
+| SA-15 | `Tor 9A331` | 0.20 | 0.10 |
+| I-Hawk | `Hawk tr` | 0.60 | 0.30 |
+| Patriot | `Patriot str` | 0.30 | 0.15 |
+| altri | — | 0.65 | 0.30 |
+
+| Sensore | Tipo DCS | Passa | Ritardo in più |
+|---|---|---|---|
+| P-19 come EWR | `p-19 s-125 sr` | 1.0 | 4 s |
+| P-14 | `1L13 EWR` | 1.0 | 2 s |
+| 55G6 | `55G6 EWR` | 1.0 | 0 |
+| AN/FPS-117 | `FPS-117` | 1.0 | 0 |
+| A-50 | `A-50` | 0.80 | 15 s |
+| E-3 | `E-3A` | 0.85 | 10 s |
+| E-2C | `E-2C` | 0.70 | 20 s |
+| altri radar | — | 1.0 | 0 |
+| altri AWACS | — | 0.70 | 20 s |
+
+I valori sono una prima stima da regolare in gioco. I nomi dei tipi vanno verificati nel `dcs.log`:
+per i sistemi di mod va aggiunta una riga con il loro nome.
 
 Portate usate nella campagna (metri): SA-2 40000, SA-3 22000, SA-5 150000, SA-6 25000,
 SA-8 10000, I-Hawk 35000.
@@ -91,10 +134,11 @@ SA-8 10000, I-Hawk 35000.
 |---|---|---|
 | `CICLO` | 10 s | intervallo tra due controlli della rete |
 | `RITARDO_RETE` | 8 s | ritardo dall'avvistamento alla batteria |
-| `RITARDO_AWACS`, `P_AWACS` | 20 s, 0.7 | ritardo in più e probabilità di passaggio delle tracce AWACS |
+| `RITARDO_AWACS`, `P_AWACS` | 20 s, 0.7 | ritardo in più e probabilità di passaggio per gli AWACS di tipo non elencato |
 | `ATTIVAZIONE` | 0.85 | frazione della portata entro cui la batteria si accende |
 | `TENUTA` | 45 s | radar acceso dopo l'ultimo bersaglio in portata |
-| `P_HARM`, `P_HARM_VICINE` | 0.65, 0.3 | probabilità di silenzio per la batteria bersaglio e per le altre minacciate |
+| `P_HARM`, `P_HARM_VICINE` | 0.65, 0.3 | probabilità di silenzio (bersaglio, minacciata) per i SAM di tipo non elencato |
+| `PROFILI_SAM`, `PROFILI_SENSORI` | tabelle | profili per tipo di unità DCS (vedi sopra) |
 | `PORTATA_HARM`, `CONO_HARM` | 100 km, 45° | distanza dal lanciatore e angolo dalla sua prua entro cui una batteria accesa è minacciata |
 | `SPENTO_HARM` | 60-120 s | durata del silenzio dopo un antiradar |
 | `GUIDA` | per tipo | secondi di radar acceso dopo un lancio |

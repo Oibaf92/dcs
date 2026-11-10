@@ -22,6 +22,8 @@
   IADS_DATI = { [coalizione] = {           -- 1 = rossi, 2 = blu
       sam = { ["nome gruppo"] = { tipo = "sa6", portata = metri, mobile = true, riserva = false }, ... },
       sensori = { ["gruppo EWR"] = "radar", ["gruppo AWACS"] = "awacs", ["gruppo carri"] = "vista", ... } } }
+  Facoltativi: nei SAM p_harm e p_vicine; un sensore puo' essere { ruolo = "awacs", p_passa = ..., ritardo = ... }.
+  Senza questi valori valgono i profili per tipo di unita' DCS (PROFILI_SAM, PROFILI_SENSORI).
   (accettato anche il nome LEVANTE_IADS usato dalla campagna)
   IADS_DEBUG = true  -> messaggi a schermo quando una batteria accende o spegne il radar.
 
@@ -54,6 +56,38 @@ local SPENTO_HARM = { 60, 120 }  -- s di silenzio dopo un antiradar
 local RICERCA_OGNI, RICERCA_DURATA = 300, 30   -- batteria cieca: ricerca autonoma
 local ANTIRADAR = { "AGM_88", "AGM_45", "AGM_122", "Kh-58", "Kh-25MP", "X_58", "X_25MP", "AGM-88", "AGM-45" }
 
+-- Profili per tipo di unita' DCS (getTypeName). Per ogni gruppo vale il primo tipo del gruppo che
+-- compare nella tabella; un valore scritto nella configurazione del gruppo vince sulla tabella;
+-- se nessun tipo e' elencato valgono i valori di riserva (P_HARM/P_HARM_VICINE, PROFILO_RUOLO).
+-- SAM: p_harm = silenzio se e' la batteria bersaglio, p_vicine = silenzio se e' minacciata.
+local PROFILI_SAM = {
+  ["SNR_75V"]              = { p_harm = 0.75, p_vicine = 0.40 },   -- SA-2: sito fisso, dottrina di spegnimento
+  ["snr s-125 tr"]         = { p_harm = 0.70, p_vicine = 0.35 },   -- SA-3: sito fisso
+  ["RPC_5N62V"]            = { p_harm = 0.50, p_vicine = 0.25 },   -- SA-5: spegnere = perdere il missile
+  ["Kub 1S91 str"]         = { p_harm = 0.60, p_vicine = 0.30 },   -- SA-6: mobile
+  ["Osa 9A33 ln"]          = { p_harm = 0.40, p_vicine = 0.20 },   -- SA-8: corto raggio, mobile
+  ["SA-11 Buk SR 9S18M1"]  = { p_harm = 0.50, p_vicine = 0.25 },   -- SA-11
+  ["SA-11 Buk LN 9A310M1"] = { p_harm = 0.50, p_vicine = 0.25 },
+  ["S-300PS 40B6M tr"]     = { p_harm = 0.40, p_vicine = 0.15 },   -- SA-10: puo' ingaggiare gli antiradar
+  ["Tor 9A331"]            = { p_harm = 0.20, p_vicine = 0.10 },   -- SA-15: progettato contro gli antiradar
+  ["Hawk tr"]              = { p_harm = 0.60, p_vicine = 0.30 },   -- I-Hawk
+  ["Patriot str"]          = { p_harm = 0.30, p_vicine = 0.15 },   -- Patriot: puo' ingaggiare gli antiradar
+}
+-- Sensori: p_passa = probabilita' che il dato arrivi alla rete, ritardo = s in piu' oltre RITARDO_RETE.
+local PROFILI_SENSORI = {
+  ["p-19 s-125 sr"] = { p_passa = 1.0,  ritardo = 4 },    -- P-19 usato come EWR: vecchio, tracciamento manuale
+  ["1L13 EWR"]      = { p_passa = 1.0,  ritardo = 2 },
+  ["55G6 EWR"]      = { p_passa = 1.0,  ritardo = 0 },
+  ["FPS-117"]       = { p_passa = 1.0,  ritardo = 0 },
+  ["A-50"]          = { p_passa = 0.80, ritardo = 15 },
+  ["E-3A"]          = { p_passa = 0.85, ritardo = 10 },   -- collegamento dati migliore
+  ["E-2C"]          = { p_passa = 0.70, ritardo = 20 },
+}
+local PROFILO_RUOLO = {   -- sensori di tipo non elencato
+  radar = { p_passa = 1.0,     ritardo = 0 },
+  awacs = { p_passa = P_AWACS, ritardo = RITARDO_AWACS },
+}
+
 local S = {}   -- stato per coalizione: batterie, tracce
 local function dbg(m) LEVANTE.debug(m) end
 
@@ -63,6 +97,28 @@ local function gruppoVivo(nome)
   local g = Group.getByName(nome)
   if g and g:isExist() and g:getSize() > 0 then return g end
   return nil
+end
+
+-- primo tipo di unita' del gruppo presente nella tabella: profilo e nome del tipo
+local function cercaProfilo(g, tabella)
+  for _, u in ipairs(g:getUnits() or {}) do
+    local ok, tipo = pcall(function() return u:getTypeName() end)
+    if ok and tipo and tabella[tipo] then return tabella[tipo], tipo end
+  end
+  return nil, nil
+end
+
+-- risolve il profilo di un sensore la prima volta che il suo gruppo esiste (anche se attivato dopo)
+local function profiloSensore(nome, s, g)
+  if s.risolto or s.ruolo == "vista" then return end
+  local prof, tipo = cercaProfilo(g, PROFILI_SENSORI)
+  local base = PROFILO_RUOLO[s.ruolo] or PROFILO_RUOLO.radar
+  prof = prof or base
+  s.p_passa = s.cfg.p_passa or prof.p_passa or base.p_passa
+  s.ritardo = s.cfg.ritardo or prof.ritardo or base.ritardo
+  s.risolto = true
+  env.info(string.format("[IADS] sensore %s (%s): profilo %s, passa %.2f, ritardo +%d s",
+    nome, s.ruolo, tipo or ("riserva " .. s.ruolo), s.p_passa, s.ritardo))
 end
 
 local function centro(g)
@@ -109,10 +165,12 @@ local function raccogliTracce(coal, st, ora)
     st.tracce[id] = { x = p.x, y = p.y, z = p.z, visto = ora, pronto = pronto }
   end
   local quanti = 0
-  for nome, ruolo in pairs(DATI[coal].sensori or {}) do
+  for nome, s in pairs(st.sensori) do
+    local ruolo = s.ruolo
     local g = gruppoVivo(nome)
     if g then
       quanti = quanti + 1
+      profiloSensore(nome, s, g)
       local u = g:getUnit(1)
       if u then
         local ok, rilevati = pcall(function()
@@ -123,8 +181,10 @@ local function raccogliTracce(coal, st, ora)
         end)
         if ok and rilevati then
           for _, r in pairs(rilevati) do
-            if ruolo ~= "awacs" or math.random() < P_AWACS then
-              aggiungi(r.object, RITARDO_RETE + (ruolo == "awacs" and RITARDO_AWACS or 0))
+            if ruolo == "vista" then
+              aggiungi(r.object, RITARDO_RETE)
+            elseif math.random() < s.p_passa then
+              aggiungi(r.object, RITARDO_RETE + s.ritardo)
             end
           end
         end
@@ -217,8 +277,8 @@ local function silenzio(nome, b, ora)
   end, nil, ora + math.random(3, 8))
 end
 
--- la rete della coalizione coal vede l'oggetto in questo istante? Solo radar: EWR ("radar"),
--- AWACS (che passa l'informazione con probabilita' P_AWACS) e SAM accesi; le unita' "vista" no.
+-- la rete della coalizione coal vede l'oggetto in questo istante? Solo radar: EWR ("radar") e AWACS,
+-- che passano l'informazione con la probabilita' del loro profilo, e SAM accesi; le unita' "vista" no.
 local function reteVede(coal, obj)
   local function vede(nome)
     local g = gruppoVivo(nome)
@@ -229,9 +289,12 @@ local function reteVede(coal, obj)
     end)
     return ok and rilevato and visibile
   end
-  for nome, ruolo in pairs(DATI[coal].sensori or {}) do
-    if ruolo == "radar" and vede(nome) then return true end
-    if ruolo == "awacs" and vede(nome) and math.random() < P_AWACS then return true end
+  for nome, s in pairs(S[coal].sensori) do
+    if s.ruolo ~= "vista" then
+      local g = gruppoVivo(nome)
+      if g then profiloSensore(nome, s, g) end
+      if g and vede(nome) and math.random() < s.p_passa then return true end
+    end
   end
   for nome, b in pairs(S[coal].batterie) do
     if b.acceso and vede(nome) then return true end
@@ -271,11 +334,11 @@ local function reazioneHarm(e)
         if b.acceso then
           local p = 0
           if nome == bersaglio then
-            p = P_HARM
+            p = b.p_harm
           else
             local g = gruppoVivo(nome)
             local c = g and centro(g)
-            if c and minacciata(c, pt, prua) then p = P_HARM_VICINE end
+            if c and minacciata(c, pt, prua) then p = b.p_vicine end
           end
           if p > 0 and math.random() < p then
             silenzio(nome, b, ora)
@@ -342,12 +405,26 @@ world.addEventHandler(gestore)
 -- Avvio: tutte le batterie spente
 ------------------------------------------------------------------------
 for coal, d in pairs(DATI) do
-  S[coal] = { batterie = {}, tracce = {}, sensoriVivi = 0 }
+  S[coal] = { batterie = {}, tracce = {}, sensori = {}, sensoriVivi = 0 }
   local n = 0
   for nome, cfg in pairs(d.sam or {}) do
-    S[coal].batterie[nome] = { tipo = cfg.tipo, portata = cfg.portata, mobile = cfg.mobile, riserva = cfg.riserva, acceso = false }
+    -- probabilita' di silenzio: configurazione del gruppo > tabella per tipo DCS > valori di riserva
+    local g = gruppoVivo(nome)
+    local prof, tipo = nil, nil
+    if g then prof, tipo = cercaProfilo(g, PROFILI_SAM) end
+    prof = prof or {}
+    local b = { tipo = cfg.tipo, portata = cfg.portata, mobile = cfg.mobile, riserva = cfg.riserva, acceso = false,
+                p_harm = cfg.p_harm or prof.p_harm or P_HARM, p_vicine = cfg.p_vicine or prof.p_vicine or P_HARM_VICINE }
+    S[coal].batterie[nome] = b
+    log(string.format("%s: profilo %s, silenzio bersaglio %.2f, minacciata %.2f",
+      nome, tipo or "di riserva", b.p_harm, b.p_vicine))
     pcall(radar, nome, false)
     n = n + 1
+  end
+  -- sensori: "ruolo" oppure { ruolo = "...", p_passa = ..., ritardo = ... }
+  for nome, v in pairs(d.sensori or {}) do
+    local cfg = (type(v) == "table") and v or { ruolo = v }
+    S[coal].sensori[nome] = { ruolo = cfg.ruolo or "radar", cfg = cfg }
   end
   log(string.format("coalizione %d: %d batterie, radar spenti", coal, n))
 end

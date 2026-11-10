@@ -8,7 +8,8 @@
 7) la rete rileva solo armi (HARM, proiettile) -> l'SA-6 resta spento: contano solo aerei ed elicotteri;
 8) HARM lanciato da un aereo che nessun radar della rete vede -> nessuna reazione;
 9) HARM senza bersaglio noto da un aereo visto -> si spegne la batteria davanti al lanciatore, non quella
-   alle sue spalle, e mai le batterie della coalizione che lancia."""
+   alle sue spalle, e mai le batterie della coalizione che lancia;
+10) profili per tipo di unita' DCS: valore dalla tabella, dalla configurazione del gruppo, di riserva."""
 import os
 from lupa import lua51
 
@@ -42,25 +43,25 @@ local function arma(nome, cat, x, z)
 end
 HARM_VOLO = arma("AGM_88", 1, 10000, 0)
 PROIETTILE = arma("M61_20_HE", 0, 5000, 0)
-local function gruppo(nome, x, z)
+local function gruppo(nome, x, z, tipo)
   local ctrl = { setOption = function(_, id, v) STATO.allarme[nome] = v end,
                  setTask = function(_, t) STATO.compiti[nome] = t end,
                  getDetectedTargets = function() local out = {}; for i, o in ipairs(RILEVA[nome] or {}) do out[i] = { object = o } end; return out end,
                  isTargetDetected = function(_, o) for _, t in ipairs(RILEVA[nome] or {}) do if t == o then return true, true end end
                                                    return false, false end }
   local unita = { getPoint = function() return { x = x, y = 0, z = z } end, getController = function() return ctrl end,
-                  getGroup = function() return GRUPPI[nome] end }
+                  getGroup = function() return GRUPPI[nome] end, getTypeName = function() return tipo end }
   return { isExist = function() return STATO.vivi[nome] == true end, getSize = function() return STATO.vivi[nome] and 1 or 0 end,
            getUnits = function() return { unita } end, getUnit = function() return unita end,
            getController = function() return ctrl end, getName = function() return nome end }
 end
-GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0), ["EWR"] = gruppo("EWR", 30000, 0),
-           ["SA-8 Dietro"] = gruppo("SA-8 Dietro", 30000, 0),   -- alle spalle di chi lancia da x = 15000 verso -x
-           ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000) }      -- blu, davanti al lanciatore blu
+GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0, "Kub 1S91 str"), ["EWR"] = gruppo("EWR", 30000, 0, "55G6 EWR"),
+           ["SA-8 Dietro"] = gruppo("SA-8 Dietro", 30000, 0, "Osa 9A33 ln"),   -- alle spalle di chi lancia da x = 15000 verso -x
+           ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000, "tipo sconosciuto") }  -- blu, davanti al lanciatore blu
 
 Group.getByName = function(n) return GRUPPI[n] end
 IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobile = true },
-                                 ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000 } },
+                                 ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000, p_harm = 0.9 } },
                          sensori = { ["EWR"] = "radar" } },
                [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } } } }
 math.random = function(a, b) if a then return a end return 0.1 end    -- deterministico
@@ -78,6 +79,14 @@ def allarme(nome="SA-6 X"):
 
 passo(6)
 assert allarme() == VERDE, 'all\'avvio i radar devono essere spenti'
+# 10) profili per tipo DCS: tabella, valore della configurazione che vince, valori di riserva
+def val(espr):
+    return L.eval(espr)
+assert (val('S[1].batterie["SA-6 X"].p_harm'), val('S[1].batterie["SA-6 X"].p_vicine')) == (0.60, 0.30), 'SA-6: profilo Kub dalla tabella'
+assert (val('S[1].batterie["SA-8 Dietro"].p_harm'), val('S[1].batterie["SA-8 Dietro"].p_vicine')) == (0.9, 0.20), \
+    'SA-8: p_harm dalla configurazione, p_vicine dalla tabella'
+assert (val('S[2].batterie["Hawk Blu"].p_harm'), val('S[2].batterie["Hawk Blu"].p_vicine')) == (0.65, 0.3), 'tipo sconosciuto: riserva'
+assert (val('S[1].sensori["EWR"].p_passa'), val('S[1].sensori["EWR"].ritardo')) == (1.0, 0), 'EWR: profilo 55G6'
 # 7) solo armi rilevate: nessuna accensione
 L.execute('RILEVA["EWR"] = { HARM_VOLO, PROIETTILE }')
 passo(40)
