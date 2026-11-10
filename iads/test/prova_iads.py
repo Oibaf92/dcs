@@ -13,6 +13,7 @@
 11) l'SA-6 spara di nuovo prima dello spostamento -> si sposta solo quando ha finito di guidare;
 12) AWACS: un solo sorteggio per contatto. Un contatto non passato resta non passato finche' l'AWACS
     lo segue; perso per piu' di 30 s e ritrovato, viene sorteggiato di nuovo;
+6, segue) la ricerca autonoma della rete cieca e' sfalsata: le batterie non cercano tutte insieme;
 13) gruppi non ancora presenti: ad attivazione ritardata o creati durante la missione restano in attesa
     (non sono distrutti, non svegliano le riserve) ed entrano nella rete a radar spento quando compaiono;
     una batteria distrutta che ricompare con lo stesso nome rientra nella rete."""
@@ -80,7 +81,12 @@ IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobi
                [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } },
                        sensori = { ["AWACS Blu"] = "awacs" } } }
 CASUALE = 0.1   -- valore restituito da math.random(): deterministico, regolabile dalla prova
-math.random = function(a, b) if a then return a end return CASUALE end
+SEQUENZA = {}   -- se non vuota, math.random() restituisce prima questi valori, in ordine
+math.random = function(a, b)
+  if a then return a end
+  if #SEQUENZA > 0 then return table.remove(SEQUENZA, 1) end
+  return CASUALE
+end
 ''')
 L.execute(open(os.path.join(QUI, "..", "iads.lua"), encoding="utf-8").read().replace("local S = {}", "S = {}"))
 ROSSO, VERDE = 2, 1
@@ -198,15 +204,25 @@ assert allarme() == ROSSO, 'radar acceso per la guida'
 passo(50)                # t0 + 145: guida finita
 assert L.eval('STATO.compiti["SA-6 X"]') is not None, 'finita la guida deve spostarsi'
 assert allarme() == VERDE, 'si sposta a radar spento'
-# 6) EWR distrutto: rete cieca, ricerca autonoma
+# 6) EWR distrutto: rete cieca, ricerca autonoma, sfalsata tra le batterie
+L.execute('RILEVA["EWR"] = {}')   # nessun bersaglio: le batterie si spengono prima della prova
 passo(400)
-L.execute('STATO.vivi["EWR"] = false; RILEVA["EWR"] = {}')
+ROSSE = ["SA-6 X", "SA-8 Dietro", "SA-6 Tardi", "SA-3 Nuovo"]
+assert all(allarme(n) == VERDE for n in ROSSE), 'prima della rete cieca le batterie rosse sono spente'
+L.execute('STATO.vivi["EWR"] = false; RILEVA["EWR"] = {}; SEQUENZA = { 0.05, 0.35, 0.65, 0.95 }')
 cambi = []
-for _ in range(60):
+primaRicerca = {}
+for i in range(60):
     passo(10)
     cambi.append(allarme())
+    for n in ROSSE:
+        if n not in primaRicerca and allarme(n) == ROSSO:
+            primaRicerca[n] = i
 assert ROSSO in cambi and VERDE in cambi, 'rete cieca: deve accendersi per brevi ricerche'
 print('ricerca autonoma: acceso %d cicli su 60' % cambi.count(ROSSO))
+assert len(primaRicerca) == len(ROSSE), 'rete cieca: ogni batteria deve fare la sua ricerca'
+assert len(set(primaRicerca.values())) == len(ROSSE), \
+    'rete cieca: le batterie non devono cercare tutte nello stesso istante (%s)' % primaRicerca
 # 12) AWACS E-2C (passa 0.70): un solo sorteggio per contatto
 assert allarme("Hawk Blu") == VERDE
 L.execute('CASUALE = 0.9; RILEVA["AWACS Blu"] = { MIG }')   # primo contatto: sorteggio fallito

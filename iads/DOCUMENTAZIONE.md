@@ -139,7 +139,7 @@ S[coal] = {
 | `ultimoBersaglio` | stato | istante dell'ultimo bersaglio in portata o dell'ultimo tiro |
 | `guidaFino` | stato | fino a quando il radar deve restare acceso per guidare i missili |
 | `silenzioFino` | stato | fino a quando il radar è in silenzio dopo un antiradar |
-| `ultimaRicerca`, `ricercaFino` | stato | ricerca autonoma della rete cieca |
+| `prossimaRicerca`, `ricercaFino` | stato | rete cieca: istante della prossima ricerca autonoma e fine di quella in corso |
 | `inMovimento` | stato | la batteria si sta spostando dopo il tiro |
 | `spostamentoPrevisto` | stato | uno spostamento è già programmato (evita di programmarne due) |
 
@@ -226,10 +226,20 @@ Per ogni batteria, nell'ordine:
    - **c'è** → `ultimoBersaglio = ora`; se il radar era spento lo accende;
    - **non c'è, il radar è acceso**, sono passati più di `TENUTA` (45 s) dall'ultimo bersaglio e
      sono finite sia la guida dei missili sia la ricerca autonoma → spegne il radar;
-   - **non c'è, il radar è spento e nessun sensore è vivo** (rete cieca) e sono passati più di
-     `RICERCA_OGNI` (300 s) dall'ultima ricerca → accende il radar per `RICERCA_DURATA` (30 s).
-     Mentre è acceso, la batteria fa da sensore: se trova qualcosa, la traccia può accendere
-     anche le altre.
+   - **non c'è, il radar è spento e nessun sensore è vivo** (rete cieca) ed è arrivato l'istante
+     `prossimaRicerca` → accende il radar per `RICERCA_DURATA` (30 s). Mentre è acceso, la
+     batteria fa da sensore: se trova qualcosa, la traccia può accendere anche le altre.
+
+**Ricerche sfalsate.** Quando la rete diventa cieca, ogni batteria sceglie la sua prima ricerca a un
+istante a caso entro `RICERCA_OGNI`; dopo ogni ricerca la successiva arriva dopo `RICERCA_OGNI`
+± `RICERCA_SCARTO` (210-390 s). Così le batterie non si accendono tutte insieme, il che sarebbe
+irrealistico e le esporrebbe tutte allo stesso HARM. Quando la rete torna ad avere sensori,
+`prossimaRicerca` si azzera; alla cecità successiva le ricerche si sfalsano di nuovo.
+
+La rete è cieca quando nessun gruppo sensore configurato è vivo: distrutti, non ancora attivati o
+mai configurati. Una configurazione senza sensori è quindi cieca fin dall'inizio, ed è l'unico modo
+in cui le sue batterie possono trovare bersagli; all'avvio il `dcs.log` lo segnala. Il passaggio a
+rete cieca, e il ritorno, compaiono nel log come `[IADS] coalizione N: rete cieca, ...`.
 
 ### 5.3 Stati di una batteria
 
@@ -241,7 +251,7 @@ stateDiagram-v2
     InAttesa --> Spenta: il gruppo compare (attivazione, creazione)
     Riserva --> Spenta: la rete perde una batteria
     Spenta --> Accesa: traccia pronta in portata
-    Spenta --> Accesa: rete cieca, ricerca ogni 300 s
+    Spenta --> Accesa: rete cieca, ricerca ogni 210-390 s
     Accesa --> Spenta: 45 s senza bersagli, guida e ricerca finite
     Accesa --> Silenzio: antiradar (con probabilità)
     Silenzio --> Spenta: dopo 60-120 s
@@ -366,7 +376,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | `TENUTA` | 45 s | radar acceso dopo l'ultimo bersaglio |
 | `GUIDA` | 30-180 s | radar acceso dopo un lancio |
 | `SPENTO_HARM` | 60-120 s | silenzio dopo un antiradar (più 3-8 s di reazione) |
-| `RICERCA_OGNI`, `RICERCA_DURATA` | 300 s, 30 s | rete cieca |
+| `RICERCA_OGNI`, `RICERCA_DURATA`, `RICERCA_SCARTO` | 300 s, 30 s, ±30% | rete cieca: prima ricerca entro 300 s, poi ogni 210-390 s |
 | — | 90 s | dal primo tiro allo spostamento di un SAM mobile (di più se la guida non è finita) |
 
 ---
@@ -404,7 +414,8 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
    "vede"; `STATO.allarme[gruppo]` registra l'ultimo stato di allarme impostato dallo script;
 3. rende `math.random` deterministico (restituisce sempre il minimo, o il valore della variabile
    `CASUALE`, di solito 0.1): ogni sorteggio con probabilità superiore a 0.1 riesce. Il caso 12
-   cambia `CASUALE` per far fallire un sorteggio;
+   cambia `CASUALE` per far fallire un sorteggio; il caso 6 mette in `SEQUENZA` una serie di valori
+   che `math.random()` restituisce per primi, per dare a ogni batteria un istante diverso;
 4. carica `iads.lua` rendendo globale la tabella `S`, così la prova può leggerne e modificarne lo
    stato;
 5. fa avanzare il tempo a passi di 1 s e controlla gli scenari:
@@ -421,7 +432,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | 9 | HARM senza bersaglio noto | si spegne la batteria davanti al lanciatore, non quella alle spalle né quella amica del lanciatore |
 | 5, 11 | la batteria spara, poi spara di nuovo prima dello spostamento | si sposta a radar spento, ma solo quando ha finito di guidare |
 | 13 | gruppi assenti all'avvio, poi attivati o creati; distrutto e ricreato | in attesa senza svegliare le riserve; entrano nella rete a radar spento; il distrutto rientra |
-| 6 | EWR distrutto | ricerca autonoma periodica |
+| 6 | EWR distrutto | ricerca autonoma periodica, sfalsata: ogni batteria inizia in un ciclo diverso |
 | 12 | AWACS E-2C: primo sorteggio fallito, poi contatto perso e ritrovato | il contatto non passa finché l'AWACS lo segue; ritrovato dopo 30 s, nuovo sorteggio |
 
 ```bash
@@ -439,8 +450,6 @@ vanno verificati in gioco.
 
 Emersi dall'analisi del codice e non ancora corretti:
 
-- **Rete cieca.** Una configurazione senza sensori è cieca fin dall'inizio; e tutte le batterie
-  fanno la ricerca autonoma nello stesso istante, non sfalsate.
 - **Bersaglio dell'antiradar.** DCS spesso non fornisce il bersaglio (`getTarget()` restituisce
   `nil`): in quel caso vale solo la regola delle batterie minacciate.
 - **Commento non allineato.** In `raccogliTracce` il commento sulle batterie accese dice "senza

@@ -34,8 +34,11 @@ Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZI
 - **Spostamento dopo il tiro.** I SAM mobili, 90 s dopo aver sparato, si spostano di 0,8-1,5 km
   fuori strada a radar spento, poi tornano operativi. Se hanno ancora missili da guidare, anche
   sparati dopo il primo, lo spostamento aspetta la fine della guida.
-- **Rete cieca.** Se tutti i sensori della coalizione sono distrutti, le batterie accendono il
-  proprio radar per 30 s ogni 5 minuti, esponendosi agli HARM.
+- **Rete cieca.** Se nessun sensore della coalizione è vivo (distrutti, non ancora attivati, o
+  nessuno configurato), le batterie accendono il proprio radar per 30 s circa ogni 5 minuti,
+  esponendosi agli HARM. Le ricerche sono sfalsate: ogni batteria fa la prima a un istante a caso
+  entro 5 minuti, poi ogni 3,5-6,5 minuti, così la rete non si accende tutta insieme. Nel `dcs.log`
+  compare una riga quando la rete diventa cieca e quando torna ad avere sensori.
 - **Riserva.** Le batterie con `riserva = true` restano spente finché la rete non perde la prima
   batteria.
 - **Gruppi che compaiono dopo.** Un SAM ad attivazione ritardata, creato durante la missione o
@@ -153,6 +156,7 @@ SA-8 10000, I-Hawk 35000.
 | `SPENTO_HARM` | 60-120 s | durata del silenzio dopo un antiradar |
 | `GUIDA` | per tipo | secondi di radar acceso dopo un lancio |
 | `RICERCA_OGNI`, `RICERCA_DURATA` | 300 s, 30 s | ricerca autonoma della rete cieca |
+| `RICERCA_SCARTO` | 0.3 | variazione casuale dell'intervallo tra due ricerche (±30%) |
 | `ANTIRADAR` | elenco | parti del nome dei missili trattati come antiradar |
 
 ## Limiti

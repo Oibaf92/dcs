@@ -55,6 +55,7 @@ local CONO_HARM = 45             -- gradi ai lati della prua del lanciatore entr
 local GUIDA = { sa5 = 180, sa2 = 90, sa3 = 60, sa6 = 60, sa8 = 30, hawk = 60 }   -- s di guida dopo il lancio
 local SPENTO_HARM = { 60, 120 }  -- s di silenzio dopo un antiradar
 local RICERCA_OGNI, RICERCA_DURATA = 300, 30   -- batteria cieca: ricerca autonoma
+local RICERCA_SCARTO = 0.3       -- intervallo tra due ricerche: RICERCA_OGNI +/- 30%, diverso per ogni batteria
 local ANTIRADAR = { "AGM_88", "AGM_45", "AGM_122", "Kh-58", "Kh-25MP", "X_58", "X_25MP", "AGM-88", "AGM-45" }
 
 -- Profili per tipo di unita' DCS (getTypeName). Per ogni gruppo vale il primo tipo del gruppo che
@@ -156,7 +157,7 @@ local function entraInRete(nome, b, g)
   b.p_harm = b.cfg.p_harm or prof.p_harm or P_HARM
   b.p_vicine = b.cfg.p_vicine or prof.p_vicine or P_HARM_VICINE
   b.presente, b.acceso, b.inMovimento = true, false, false
-  b.ultimoBersaglio, b.guidaFino, b.silenzioFino, b.ricercaFino, b.ultimaRicerca = nil, nil, nil, nil, nil
+  b.ultimoBersaglio, b.guidaFino, b.silenzioFino, b.ricercaFino, b.prossimaRicerca = nil, nil, nil, nil, nil
   pcall(radar, nome, false)
   log(string.format("%s: nella rete, radar spento; profilo %s, silenzio bersaglio %.2f, minacciata %.2f",
     nome, tipo or "di riserva", b.p_harm, b.p_vicine))
@@ -256,7 +257,14 @@ end
 local function ciclo(coal, ora)
   local st = S[coal]
   raccogliTracce(coal, st, ora)
+  local cieca = (st.sensoriVivi == 0)
+  if cieca ~= (st.cieca or false) then
+    st.cieca = cieca
+    log(string.format("coalizione %d: %s", coal, cieca and "rete cieca, nessun sensore vivo: le batterie cercano da sole"
+                                                        or "la rete ha di nuovo dei sensori"))
+  end
   for nome, b in pairs(st.batterie) do
+    if not cieca then b.prossimaRicerca = nil end   -- alla prossima cecita' le ricerche si sfalsano di nuovo
     local g = gruppoVivo(nome)
     if not g then
       -- era nella rete: distrutta. Se non c'e' mai stata (attivazione ritardata, creata dopo, nome
@@ -293,11 +301,18 @@ local function ciclo(coal, ora)
              and ora >= (b.guidaFino or 0) then
         radar(nome, false); b.acceso = false
         dbg(nome .. ": radar spento (nessun bersaglio in portata)")
-      elseif not b.acceso and st.sensoriVivi == 0 and ora - (b.ultimaRicerca or -1e9) > RICERCA_OGNI then
-        -- rete cieca: breve ricerca con il proprio radar
-        b.ultimaRicerca, b.ricercaFino = ora, ora + RICERCA_DURATA
-        radar(nome, true); b.acceso = true
-        dbg(nome .. ": rete cieca, breve ricerca con il proprio radar")
+      elseif not b.acceso and cieca then
+        -- rete cieca: brevi ricerche con il proprio radar, sfalsate tra le batterie. La prima a un
+        -- istante a caso entro RICERCA_OGNI, poi ogni RICERCA_OGNI +/- RICERCA_SCARTO
+        if not b.prossimaRicerca then
+          b.prossimaRicerca = ora + math.random() * RICERCA_OGNI
+        end
+        if ora >= b.prossimaRicerca then
+          b.ricercaFino = ora + RICERCA_DURATA
+          b.prossimaRicerca = ora + RICERCA_OGNI * (1 - RICERCA_SCARTO + 2 * RICERCA_SCARTO * math.random())
+          radar(nome, true); b.acceso = true
+          dbg(nome .. ": rete cieca, breve ricerca con il proprio radar")
+        end
       end
     end
   end
@@ -504,6 +519,9 @@ for coal, d in pairs(DATI) do
     S[coal].sensori[nome] = { ruolo = cfg.ruolo or "radar", cfg = cfg, esiti = {} }
   end
   log(string.format("coalizione %d: %d batterie, radar spenti", coal, n))
+  if next(S[coal].sensori) == nil and n > 0 then
+    log(string.format("coalizione %d: nessun sensore configurato, la rete e' cieca: le batterie cercheranno da sole", coal))
+  end
 end
 
 local function giro()
