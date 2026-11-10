@@ -10,8 +10,10 @@
   - se i sensori della rete sono distrutti le batterie sono cieche: ogni tanto accendono il proprio
     radar per cercare (esponendosi agli HARM);
   - l'allarme arriva alla batteria con un ritardo; l'AWACS condivide solo in parte, con piu' ritardo;
-  - reazione ai missili antiradar incerta: la batteria bersaglio spegne con probabilita' P_HARM dopo
-    qualche secondo; le batterie vicine con probabilita' minore;
+  - reazione ai missili antiradar solo se un radar della rete (EWR, AWACS, SAM acceso) vede l'aereo
+    nel momento del lancio; spengono, con probabilita', le batterie minacciate: quella bersaglio
+    (P_HARM) e quelle accese davanti al lanciatore entro PORTATA_HARM (P_HARM_VICINE). Le batterie
+    della coalizione che lancia non reagiscono mai;
   - il radar resta acceso finche' guida i propri missili (GUIDA);
   - i SAM mobili (mobile = true) dopo aver sparato si spostano di 0,8-1,5 km a radar spento;
   - le batterie di riserva (riserva = true) restano spente finche' la rete non perde una batteria.
@@ -45,6 +47,8 @@ local P_AWACS = 0.7              -- probabilita' che una traccia AWACS venga pas
 local ATTIVAZIONE = 0.85         -- frazione della portata entro cui la batteria si accende
 local TENUTA = 45                -- s di radar acceso dopo l'ultimo bersaglio in portata
 local P_HARM, P_HARM_VICINE = 0.65, 0.3
+local PORTATA_HARM = 100000      -- m dal lanciatore entro cui una batteria accesa e' minacciata
+local CONO_HARM = 45             -- gradi ai lati della prua del lanciatore entro cui una batteria e' minacciata
 local GUIDA = { sa5 = 180, sa2 = 90, sa3 = 60, sa6 = 60, sa8 = 30, hawk = 60 }   -- s di guida dopo il lancio
 local SPENTO_HARM = { 60, 120 }  -- s di silenzio dopo un antiradar
 local RICERCA_OGNI, RICERCA_DURATA = 300, 30   -- batteria cieca: ricerca autonoma
@@ -213,25 +217,71 @@ local function silenzio(nome, b, ora)
   end, nil, ora + math.random(3, 8))
 end
 
+-- la rete della coalizione coal vede l'oggetto in questo istante? Solo radar: EWR ("radar"),
+-- AWACS (che passa l'informazione con probabilita' P_AWACS) e SAM accesi; le unita' "vista" no.
+local function reteVede(coal, obj)
+  local function vede(nome)
+    local g = gruppoVivo(nome)
+    local u = g and g:getUnit(1)
+    if not u then return false end
+    local ok, rilevato, visibile = pcall(function()
+      return u:getController():isTargetDetected(obj, Controller.Detection.RADAR)
+    end)
+    return ok and rilevato and visibile
+  end
+  for nome, ruolo in pairs(DATI[coal].sensori or {}) do
+    if ruolo == "radar" and vede(nome) then return true end
+    if ruolo == "awacs" and vede(nome) and math.random() < P_AWACS then return true end
+  end
+  for nome, b in pairs(S[coal].batterie) do
+    if b.acceso and vede(nome) then return true end
+  end
+  return false
+end
+
+-- batteria accesa minacciata dal lancio: entro PORTATA_HARM e davanti al lanciatore (entro CONO_HARM)
+local function minacciata(c, pt, prua)
+  local dx, dz = c.x - pt.x, c.z - pt.z
+  local d = math.sqrt(dx * dx + dz * dz)
+  if d >= PORTATA_HARM then return false end
+  if not prua or d == 0 then return true end
+  return (dx * prua.x + dz * prua.z) / d >= math.cos(math.rad(CONO_HARM))
+end
+
 local function reazioneHarm(e)
-  local arma = e.weapon
+  local arma, lanciatore = e.weapon, e.initiator
+  if not lanciatore then return end
   local ora = timer.getTime()
+  local okp, pt = pcall(function() return lanciatore:getPoint() end)
+  if not okp or not pt then return end
+  local okc, coalLancio = pcall(function() return lanciatore:getCoalition() end)
+  if not okc then coalLancio = nil end
+  local prua = nil
+  pcall(function()
+    local x = lanciatore:getPosition().x
+    local m = math.sqrt(x.x * x.x + x.z * x.z)
+    if m > 0 then prua = { x = x.x / m, z = x.z / m } end
+  end)
   local bersaglio = nil
   pcall(function() local t = arma:getTarget(); bersaglio = t and t:getGroup() and t:getGroup():getName() end)
-  local pt = e.initiator and e.initiator:getPoint()
   for coal, st in pairs(S) do
-    for nome, b in pairs(st.batterie) do
-      if b.acceso then
-        local p = (nome == bersaglio) and P_HARM or 0
-        if p == 0 and pt then
-          local g = gruppoVivo(nome)
-          local c = g and centro(g)
-          if c and math.sqrt((c.x - pt.x) ^ 2 + (c.z - pt.z) ^ 2) < 100000 then p = P_HARM_VICINE end
-        end
-        if p > 0 and math.random() < p then
-          silenzio(nome, b, ora)
-          LEVANTE.annota("iads_silenzio_harm", { gruppo = nome })
-          dbg(nome .. ": missile antiradar rilevato, radar in silenzio")
+    -- solo le reti nemiche del lanciatore, e solo se un loro radar lo vede mentre lancia
+    if coal ~= coalLancio and reteVede(coal, lanciatore) then
+      for nome, b in pairs(st.batterie) do
+        if b.acceso then
+          local p = 0
+          if nome == bersaglio then
+            p = P_HARM
+          else
+            local g = gruppoVivo(nome)
+            local c = g and centro(g)
+            if c and minacciata(c, pt, prua) then p = P_HARM_VICINE end
+          end
+          if p > 0 and math.random() < p then
+            silenzio(nome, b, ora)
+            LEVANTE.annota("iads_silenzio_harm", { gruppo = nome })
+            dbg(nome .. ": missile antiradar rilevato, radar in silenzio")
+          end
         end
       end
     end

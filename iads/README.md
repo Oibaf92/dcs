@@ -19,8 +19,12 @@ MOOSE, MIST o altri script.
   (SA-2 90 s, SA-3 60, SA-5 180, SA-6 60, SA-8 30, Hawk 60): niente missili persi perché la
   batteria si è spenta da sola.
 - **Missili antiradar.** Quando viene lanciato un antiradar (AGM-88, AGM-45, AGM-122, Kh-58,
-  Kh-25MP), la batteria bersaglio spegne il radar con probabilità 65% dopo 3-8 s; le batterie
-  accese entro 100 km dal lanciatore con probabilità 30%. Il silenzio dura 60-120 s.
+  Kh-25MP), la rete reagisce solo se in quel momento un suo radar vede l'aereo che lancia: un EWR,
+  un SAM acceso o un AWACS (che passa l'informazione con probabilità 70%); gli osservatori a vista
+  non contano. Chi lancia basso dietro il rilievo o fuori copertura non provoca reazioni. Spengono il
+  radar dopo 3-8 s le batterie minacciate: quella bersaglio con probabilità 65%, quelle accese entro
+  100 km davanti al lanciatore (±45° dalla prua) con probabilità 30%. Le batterie della coalizione
+  che lancia non reagiscono mai. Il silenzio dura 60-120 s.
 - **Spostamento dopo il tiro.** I SAM mobili, 90 s dopo aver sparato, si spostano di 0,8-1,5 km
   fuori strada a radar spento, poi tornano operativi.
 - **Rete cieca.** Se tutti i sensori della coalizione sono distrutti, le batterie accendono il
@@ -90,7 +94,8 @@ SA-8 10000, I-Hawk 35000.
 | `RITARDO_AWACS`, `P_AWACS` | 20 s, 0.7 | ritardo in più e probabilità di passaggio delle tracce AWACS |
 | `ATTIVAZIONE` | 0.85 | frazione della portata entro cui la batteria si accende |
 | `TENUTA` | 45 s | radar acceso dopo l'ultimo bersaglio in portata |
-| `P_HARM`, `P_HARM_VICINE` | 0.65, 0.3 | probabilità di silenzio per la batteria bersaglio e per le vicine |
+| `P_HARM`, `P_HARM_VICINE` | 0.65, 0.3 | probabilità di silenzio per la batteria bersaglio e per le altre minacciate |
+| `PORTATA_HARM`, `CONO_HARM` | 100 km, 45° | distanza dal lanciatore e angolo dalla sua prua entro cui una batteria accesa è minacciata |
 | `SPENTO_HARM` | 60-120 s | durata del silenzio dopo un antiradar |
 | `GUIDA` | per tipo | secondi di radar acceso dopo un lancio |
 | `RICERCA_OGNI`, `RICERCA_DURATA` | 300 s, 30 s | ricerca autonoma della rete cieca |
@@ -109,8 +114,10 @@ SA-8 10000, I-Hawk 35000.
 ## Prova fuori dal gioco
 `test/prova_iads.py` esegue lo script in un DCS simulato (`test/mock_dcs.lua`) e controlla:
 accensione solo dopo il rilevamento e il ritardo, nessuna accensione per un aereo non rilevato,
-spegnimento quando il bersaglio esce dalla portata, silenzio dopo un HARM, spostamento dopo il tiro,
-ricerca autonoma con la rete cieca.
+spegnimento quando il bersaglio esce dalla portata, silenzio dopo un HARM, nessuna reazione a un HARM
+lanciato da un aereo che la rete non vede, silenzio solo per le batterie minacciate e mai per quelle di
+chi lancia, nessuna accensione per armi rilevate, spostamento dopo il tiro, ricerca autonoma con la rete
+cieca.
 ```
 pip install lupa
 python3 test/prova_iads.py

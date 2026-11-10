@@ -5,7 +5,10 @@
 4) HARM sull'SA-6 acceso -> silenzio (con probabilita', qui forzata);
 5) l'SA-6 spara -> si sposta a radar spento;
 6) radar di sorveglianza distrutto -> rete cieca, ricerca autonoma periodica;
-7) la rete rileva solo armi (HARM, proiettile) -> l'SA-6 resta spento: contano solo aerei ed elicotteri."""
+7) la rete rileva solo armi (HARM, proiettile) -> l'SA-6 resta spento: contano solo aerei ed elicotteri;
+8) HARM lanciato da un aereo che nessun radar della rete vede -> nessuna reazione;
+9) HARM senza bersaglio noto da un aereo visto -> si spegne la batteria davanti al lanciatore, non quella
+   alle sue spalle, e mai le batterie della coalizione che lancia."""
 import os
 from lupa import lua51
 
@@ -18,16 +21,18 @@ Controller = { Detection = { VISUAL = 1, OPTIC = 2, RADAR = 4 } }
 AI = { Option = { Ground = { id = { ALARM_STATE = 9 }, val = { ALARM_STATE = { AUTO = 0, GREEN = 1, RED = 2 } } } } }
 land.SurfaceType = { LAND = 1, SHALLOW_WATER = 2, WATER = 3, ROAD = 4, RUNWAY = 5 }
 land.getSurfaceType = function() return 1 end
-STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true } }
+STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true, ["SA-8 Dietro"] = true, ["Hawk Blu"] = true } }
 RILEVA = {}          -- RILEVA[nome sensore] = lista di oggetti rilevati
 local function aereo(nome, x, z)
   return { getName = function() return nome end, isExist = function() return true end,
+           getPosition = function() return { x = { x = -1, y = 0, z = 0 } } end,
            getCategory = function() return Object.Category.UNIT end, getCoalition = function() return 2 end, getDesc = function() return { category = 0 } end,
            getPoint = function() return { x = x, y = 1000, z = z } end }
 end
 F18 = aereo("F18", 15000, 0)
 BASSO = aereo("BASSO", 5000, 0)
 LONTANO = aereo("LONTANO", 80000, 0)
+INVISIBILE = aereo("INVISIBILE", 15000, 0)   -- nessun radar della rete lo vede
 -- armi rilevate: per un'arma getDesc().category e' Weapon.Category (MISSILE = 1, SHELL = 0)
 local function arma(nome, cat, x, z)
   return { getName = function() return nome end, isExist = function() return true end,
@@ -40,17 +45,24 @@ PROIETTILE = arma("M61_20_HE", 0, 5000, 0)
 local function gruppo(nome, x, z)
   local ctrl = { setOption = function(_, id, v) STATO.allarme[nome] = v end,
                  setTask = function(_, t) STATO.compiti[nome] = t end,
-                 getDetectedTargets = function() local out = {}; for i, o in ipairs(RILEVA[nome] or {}) do out[i] = { object = o } end; return out end }
+                 getDetectedTargets = function() local out = {}; for i, o in ipairs(RILEVA[nome] or {}) do out[i] = { object = o } end; return out end,
+                 isTargetDetected = function(_, o) for _, t in ipairs(RILEVA[nome] or {}) do if t == o then return true, true end end
+                                                   return false, false end }
   local unita = { getPoint = function() return { x = x, y = 0, z = z } end, getController = function() return ctrl end,
                   getGroup = function() return GRUPPI[nome] end }
   return { isExist = function() return STATO.vivi[nome] == true end, getSize = function() return STATO.vivi[nome] and 1 or 0 end,
            getUnits = function() return { unita } end, getUnit = function() return unita end,
            getController = function() return ctrl end, getName = function() return nome end }
 end
-GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0), ["EWR"] = gruppo("EWR", 30000, 0) }
+GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0), ["EWR"] = gruppo("EWR", 30000, 0),
+           ["SA-8 Dietro"] = gruppo("SA-8 Dietro", 30000, 0),   -- alle spalle di chi lancia da x = 15000 verso -x
+           ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000) }      -- blu, davanti al lanciatore blu
+
 Group.getByName = function(n) return GRUPPI[n] end
-IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobile = true } },
-                         sensori = { ["EWR"] = "radar" } } }
+IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobile = true },
+                                 ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000 } },
+                         sensori = { ["EWR"] = "radar" } },
+               [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } } } }
 math.random = function(a, b) if a then return a end return 0.1 end    -- deterministico
 ''')
 L.execute(open(os.path.join(QUI, "..", "iads.lua"), encoding="utf-8").read().replace("local S = {}", "S = {}"))
@@ -61,8 +73,8 @@ def passo(sec):
     # il simulatore esegue i timer con l'ora di fine intervallo: avanzare a passi di 1 s come DCS
     for _ in range(sec):
         L.execute('MOCK.avanza(1)')
-def allarme():
-    return L.eval('STATO.allarme["SA-6 X"]')
+def allarme(nome="SA-6 X"):
+    return L.eval('STATO.allarme["%s"]' % nome)
 
 passo(6)
 assert allarme() == VERDE, 'all\'avvio i radar devono essere spenti'
@@ -100,6 +112,33 @@ passo(30)
 assert allarme() == VERDE, 'resta in silenzio dopo l\'HARM'
 passo(200)
 assert allarme() == ROSSO, 'dopo il silenzio torna ad accendersi se il bersaglio c\'e\''
+# 8) HARM sull'SA-6 da un aereo che nessun radar della rete vede: nessuna reazione
+L.execute('''
+local harm = { getTypeName = function() return "AGM_88" end,
+               getTarget = function() return { getGroup = function() return GRUPPI["SA-6 X"] end } end }
+for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_SHOT, weapon = harm, initiator = INVISIBILE }) end
+''')
+passo(9)
+assert allarme() == ROSSO, 'lanciatore non visto dalla rete: la batteria non deve reagire'
+# 9) HARM senza bersaglio noto (getTarget nil) da F18, visto dall'EWR: minacciate solo le batterie davanti
+#    al lanciatore; l'Hawk blu, davanti ma della stessa coalizione di chi lancia, non reagisce
+L.execute('''
+for _, nome in ipairs({ "SA-8 Dietro", "Hawk Blu" }) do
+  local coal = (nome == "Hawk Blu") and 2 or 1
+  S[coal].batterie[nome].acceso = true; S[coal].batterie[nome].ultimoBersaglio = timer.getTime()
+  STATO.allarme[nome] = 2
+end
+RILEVA["Hawk Blu"] = { F18 }   -- anche se un radar blu "vedesse" il lanciatore, la rete blu non c'entra
+local harm = { getTypeName = function() return "AGM_88" end, getTarget = function() return nil end }
+for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_SHOT, weapon = harm, initiator = F18 }) end
+''')
+passo(9)
+assert allarme() == VERDE, 'batteria davanti al lanciatore: minacciata, deve spegnersi'
+assert allarme("SA-8 Dietro") == ROSSO, 'batteria alle spalle del lanciatore: non minacciata'
+assert allarme("Hawk Blu") == ROSSO, 'le batterie della coalizione che lancia non reagiscono'
+L.execute('RILEVA["Hawk Blu"] = {}')
+passo(200)
+assert allarme() == ROSSO
 # 5) l'SA-6 spara -> spostamento
 L.execute('''
 local sam = { getTypeName = function() return "9M336" end }
