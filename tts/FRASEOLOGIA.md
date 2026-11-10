@@ -125,6 +125,33 @@ atis_<aeroporto>_<lettera> | ryan-high | <Batumi> information <Alpha>. Runway in
 - La riga di avviso (`Bird activity...`) è facoltativa: toglila o sostituiscila
   (es. `Runway one three, work in progress.`).
 
+### Partenza (Ground → Tower → Approach)
+
+Modello standard del repo. Una voce diversa per ente, così si capisce subito chi parla:
+pilota `lessac-medium`, Ground `alan-low`, Tower `ryan-medium`, Approach `ryan-high`.
+Coerente con l'ATIS: stessa lettera, pista e QNH. Nomi `depNN_...` per tenerli in ordine.
+In DCS: un trigger per battuta, con ritardo pari alla durata della battuta precedente + 1 s.
+
+```
+dep01_pilota_startup | lessac-medium | <Kutaisi> Ground, <Viper one one>, flight of <two>, <F sixteens>, on parking, with information <Alpha>, request startup.
+dep02_ground_startup | alan-low | <Viper one one>, <Kutaisi> Ground, startup approved, Q N H <one zero one five>, call ready for taxi.
+dep03_pilota_taxi | lessac-medium | <Kutaisi> Ground, <Viper one one>, ready for taxi.
+dep04_ground_taxi | alan-low | <Viper one one>, taxi to holding point, runway <zero seven>, via taxiway <alpha>. Q N H <one zero one five>.
+dep05_pilota_readback | lessac-medium | Taxi to holding point, runway <zero seven>, via <alpha>, Q N H <one zero one five>, <Viper one one>.
+dep06_ground_handoff | alan-low | <Viper one one>, at holding point, contact <Kutaisi> Tower, <two six three decimal zero>. Good day.
+dep07_pilota_tower | lessac-medium | <Kutaisi> Tower, <Viper one one>, holding point runway <zero seven>, ready for departure.
+dep08_tower_lineup | ryan-medium | <Viper one one>, <Kutaisi> Tower, runway <zero seven>, line up and wait.
+dep09_pilota_readback | lessac-medium | Line up and wait, runway <zero seven>, <Viper one one>.
+dep10_tower_takeoff | ryan-medium | <Viper one one>, wind <zero eight zero> degrees, <six> knots, runway <zero seven>, cleared for takeoff.
+dep11_pilota_readback | lessac-medium | Cleared for takeoff, runway <zero seven>, <Viper one one>.
+dep12_tower_handoff | ryan-medium | <Viper one one>, contact <Kutaisi> Approach, <two five zero decimal five>. Good day.
+dep13_pilota_approach | lessac-medium | <Kutaisi> Approach, <Viper one one>, airborne, passing <two thousand> feet, climbing <six thousand> feet.
+dep14_approach_climb | ryan-high | <Viper one one>, <Kutaisi> Approach, radar contact. Climb flight level <two zero zero>, turn <right> heading <one two zero>.
+dep15_pilota_readback | lessac-medium | Climb flight level <two zero zero>, <right> heading <one two zero>, <Viper one one>.
+```
+
+Le frequenze sono indicative: usa quelle dell'aeroporto in DCS.
+
 ### Torre / ATC
 
 ```
