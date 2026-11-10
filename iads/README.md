@@ -29,7 +29,8 @@ Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZI
   non contano. Chi lancia basso dietro il rilievo o fuori copertura non provoca reazioni. Spengono il
   radar dopo 3-8 s le batterie minacciate: quella bersaglio e quelle accese entro 100 km davanti al
   lanciatore (±45° dalla prua), con una probabilità che dipende dal tipo di SAM (per esempio SA-2
-  75%/40%, SA-15 20%/10%; per i tipi non elencati 65%/30%). Le batterie della coalizione che lancia
+  75%/40%, SA-15 20%/10%; per i tipi non elencati 65%/30%). Se DCS non dice qual è il bersaglio,
+  lo script considera bersaglio la batteria accesa più allineata con la prua del lanciatore. Le batterie della coalizione che lancia
   non reagiscono mai. Il silenzio dura 60-120 s.
 - **Spostamento dopo il tiro.** I SAM mobili, 90 s dopo aver sparato, si spostano di 0,8-1,5 km
   fuori strada a radar spento, poi tornano operativi. Se hanno ancora missili da guidare, anche

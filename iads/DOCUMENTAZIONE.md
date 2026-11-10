@@ -14,7 +14,7 @@ Per installare lo script in una missione e scrivere la configurazione vedi il [R
 8. [Tempi: dall'avvistamento all'accensione](#8-tempi-dallavvistamento-allaccensione)
 9. [Funzioni di DCS usate](#9-funzioni-di-dcs-usate)
 10. [La prova fuori dal gioco](#10-la-prova-fuori-dal-gioco)
-11. [Punti aperti noti](#11-punti-aperti-noti)
+11. [Punti aperti e verifiche in gioco](#11-punti-aperti-e-verifiche-in-gioco)
 
 ---
 
@@ -57,7 +57,7 @@ Il file è diviso in sezioni, nell'ordine in cui le trova Lua:
 | Sezione | Contenuto principale |
 |---|---|
 | Intestazione | descrizione e formato della configurazione |
-| Compatibilità con la campagna | `LEVANTE.debug` e `LEVANTE.annota` (vedi §3) |
+| Compatibilità con la campagna | `dbg` e `annota`, che usano `LEVANTE` se la campagna lo fornisce (vedi §3) |
 | Parametri | costanti regolabili (`CICLO`, `RITARDO_RETE`, `TENUTA`, `GUIDA`, `ANTIRADAR`…) |
 | Profili | `PROFILI_SAM`, `PROFILI_SENSORI`, `PROFILO_RUOLO` (vedi §7) |
 | Funzioni di servizio | `gruppoVivo`, `cercaProfilo`, `profiloSensore`, `centro`, `radar` |
@@ -74,12 +74,15 @@ Nel Mission Editor un trigger MISSION START esegue prima la configurazione e poi
 Quando Lua esegue il file succede questo, in ordine:
 
 1. **Compatibilità con la campagna.** Lo script nasce dalla campagna "Fuoco sul Levante 1989",
-   che ha un proprio `levante_core.lua`. Se quel file non c'è, `iads.lua` crea la tabella globale
-   `LEVANTE` con due funzioni:
-   - `LEVANTE.debug(m)` scrive `[IADS DEBUG] m` nel `dcs.log` e, se `IADS_DEBUG = true`, anche a
-     schermo per 10 s;
-   - `LEVANTE.annota(chiave, dati)` non fa nulla; nella campagna registra gli eventi
-     (silenzi per antiradar, spostamenti).
+   che ha un proprio `levante_core.lua` con la tabella globale `LEVANTE`. `iads.lua` definisce due
+   funzioni locali:
+   - `dbg(m)` usa `LEVANTE.debug` se esiste; altrimenti scrive `[IADS DEBUG] m` nel `dcs.log` e, se
+     `IADS_DEBUG = true`, anche a schermo per 10 s;
+   - `annota(chiave, dati)` usa `LEVANTE.annota` se esiste (nella campagna registra silenzi per
+     antiradar e spostamenti); altrimenti non fa nulla.
+
+   `LEVANTE` viene letto a ogni chiamata, quindi conta anche se `levante_core.lua` viene caricato
+   dopo. Lo script non crea variabili globali: tutto il suo stato è locale.
 2. **Lettura della configurazione.** `DATI = IADS_DATI or LEVANTE_IADS or {}`. Il secondo nome è
    quello usato dalla campagna.
 3. **Registrazione del gestore degli eventi** con `world.addEventHandler(gestore)`.
@@ -183,7 +186,8 @@ batterie una per una.
      (`passa`, vedi sotto) e diventa una
      traccia con ritardo `RITARDO_RETE + ritardo` del profilo.
 2. **Batterie accese.** Una batteria accesa è anche un sensore: i suoi rilevamenti radar diventano
-   tracce con ritardo `RITARDO_RETE`.
+   tracce con ritardo `RITARDO_RETE`, come per gli altri sensori. Per la batteria stessa il ritardo
+   non conta: è già accesa, e in allarme RED DCS la fa ingaggiare da sola ciò che vede.
 3. **Pulizia.** Le tracce non viste da più di 30 s vengono cancellate, e così gli esiti dei
    sorteggi dei contatti che un sensore non vede da più di 30 s.
 
@@ -290,7 +294,9 @@ Un'arma è un antiradar se il suo nome di tipo contiene una delle parole di `ANT
    - batterie accese: stesso controllo, senza sorteggio;
    - i sensori `vista` non contano.
 3. **Quali batterie sono minacciate.** Tra le batterie accese di quella rete:
-   - la batteria bersaglio, se nota → probabilità `p_harm`;
+   - la batteria bersaglio → probabilità `p_harm`. Se DCS non la fornisce (`getTarget()` restituisce
+     `nil`, cosa frequente), `bersaglioPresunto` sceglie tra le batterie accese minacciate, di tutte
+     le coalizioni nemiche del lanciatore, quella con l'angolo più piccolo dalla prua;
    - le altre, se entro `PORTATA_HARM` (100 km) dal lanciatore e davanti a lui, entro `CONO_HARM`
      (±45°) dalla prua (`minacciata`) → probabilità `p_vicine`.
 4. **Silenzio.** Per ogni batteria che vince il sorteggio, `silenzio` programma lo spegnimento fra
@@ -429,7 +435,8 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | 3 | bersaglio fuori portata | spenta dopo la tenuta |
 | 4 | HARM sulla batteria accesa | silenzio, poi riaccensione |
 | 8 | HARM da un aereo che la rete non vede | nessuna reazione |
-| 9 | HARM senza bersaglio noto | si spegne la batteria davanti al lanciatore, non quella alle spalle né quella amica del lanciatore |
+| 9, 14 | HARM senza bersaglio noto, due batterie accese davanti al lanciatore | il bersaglio presunto (sulla prua) usa `p_harm` e si spegne, l'altra usa `p_vicine`; non reagiscono quella alle spalle né quella amica del lanciatore |
+| 15 | caricamento di `iads.lua` | nessuna variabile globale creata |
 | 5, 11 | la batteria spara, poi spara di nuovo prima dello spostamento | si sposta a radar spento, ma solo quando ha finito di guidare |
 | 13 | gruppi assenti all'avvio, poi attivati o creati; distrutto e ricreato | in attesa senza svegliare le riserve; entrano nella rete a radar spento; il distrutto rientra |
 | 6 | EWR distrutto | ricerca autonoma periodica, sfalsata: ogni batteria inizia in un ciclo diverso |
@@ -446,12 +453,17 @@ vanno verificati in gioco.
 
 ---
 
-## 11. Punti aperti noti
+## 11. Punti aperti e verifiche in gioco
 
-Emersi dall'analisi del codice e non ancora corretti:
+Tutti i punti emersi dall'analisi del codice sono stati corretti. Restano da verificare in gioco
+alcuni comportamenti di DCS che la prova fuori dal gioco simula ma non può confermare:
 
-- **Bersaglio dell'antiradar.** DCS spesso non fornisce il bersaglio (`getTarget()` restituisce
-  `nil`): in quel caso vale solo la regola delle batterie minacciate.
-- **Commento non allineato.** In `raccogliTracce` il commento sulle batterie accese dice "senza
-  ritardo per se stessi", ma il codice applica sempre `RITARDO_RETE`.
-- **Variabile globale.** Lo script crea la tabella globale `LEVANTE`.
+- **Nomi dei tipi di unità** nelle tabelle dei profili: il `dcs.log` scrive il profilo trovato per
+  ogni gruppo; "di riserva" per un sistema elencato vuol dire che il nome nella tabella è diverso.
+- **`isTargetDetected`** sul lanciatore di un antiradar: con `IADS_DEBUG = true` compare il
+  messaggio "missile antiradar rilevato" quando la rete reagisce.
+- **Attivazione ritardata:** che `Unit:isActive()` sia `false` prima dell'attivazione e che
+  all'attivazione DCS generi `S_EVENT_BIRTH`. Se l'evento non arriva, la batteria entra comunque
+  nella rete al ciclo successivo.
+- **`getDetectedTargets` con armi:** quanto spesso i radar restituiscono missili tra i rilevati (lo
+  script li scarta comunque).

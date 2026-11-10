@@ -16,7 +16,10 @@
 6, segue) la ricerca autonoma della rete cieca e' sfalsata: le batterie non cercano tutte insieme;
 13) gruppi non ancora presenti: ad attivazione ritardata o creati durante la missione restano in attesa
     (non sono distrutti, non svegliano le riserve) ed entrano nella rete a radar spento quando compaiono;
-    una batteria distrutta che ricompare con lo stesso nome rientra nella rete."""
+    una batteria distrutta che ricompare con lo stesso nome rientra nella rete;
+14) antiradar senza bersaglio fornito da DCS: la batteria accesa piu' allineata con la prua del lanciatore
+    e' il bersaglio presunto (p_harm), le altre minacciate usano p_vicine;
+15) iads.lua non crea variabili globali."""
 import os
 from lupa import lua51
 
@@ -88,7 +91,12 @@ math.random = function(a, b)
   return CASUALE
 end
 ''')
+L.execute('PRIMA = {}; for k in pairs(_G) do PRIMA[k] = true end')
 L.execute(open(os.path.join(QUI, "..", "iads.lua"), encoding="utf-8").read().replace("local S = {}", "S = {}"))
+# lo script non deve creare variabili globali (S e' resa globale dalla prova)
+nuove = L.eval('(function() local n = {} for k in pairs(_G) do if not PRIMA[k] and k ~= "S" then n[#n + 1] = k end end '
+               'return table.concat(n, ", ") end)()')
+assert nuove == '', 'variabili globali create da iads.lua: ' + nuove
 ROSSO, VERDE = 2, 1
 
 
@@ -123,7 +131,7 @@ for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_BIRTH,
 assert allarme("SA-6 Tardi") == VERDE, 'attivato: entra nella rete a radar spento'
 assert (val('S[1].batterie["SA-6 Tardi"].p_harm')) == 0.60, 'attivato: profilo Kub risolto all\'ingresso'
 # creato durante la missione, senza evento: entra al ciclo successivo
-L.execute('GRUPPI["SA-3 Nuovo"] = CREA_GRUPPO("SA-3 Nuovo", -60000, 0, "snr s-125 tr"); STATO.vivi["SA-3 Nuovo"] = true')
+L.execute('GRUPPI["SA-3 Nuovo"] = CREA_GRUPPO("SA-3 Nuovo", -60000, 15000, "snr s-125 tr"); STATO.vivi["SA-3 Nuovo"] = true')
 passo(10)
 assert allarme("SA-3 Nuovo") == VERDE, 'creato: entra nella rete a radar spento'
 assert val('S[1].batteriaPersa') is None
@@ -170,9 +178,12 @@ for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_SHOT, 
 passo(9)
 assert allarme() == ROSSO, 'lanciatore non visto dalla rete: la batteria non deve reagire'
 # 9) HARM senza bersaglio noto (getTarget nil) da F18, visto dall'EWR: minacciate solo le batterie davanti
-#    al lanciatore; l'Hawk blu, davanti ma della stessa coalizione di chi lancia, non reagisce
+#    al lanciatore; l'Hawk blu, davanti ma della stessa coalizione di chi lancia, non reagisce.
+#    14) bersaglio presunto: tra le batterie accese davanti, quella piu' vicina alla prua (SA-6, 0 gradi)
+#    usa p_harm (0.60); le altre minacciate p_vicine (SA-3, 11 gradi: 0.35). Sorteggio a 0.5.
 L.execute('''
-for _, nome in ipairs({ "SA-8 Dietro", "Hawk Blu" }) do
+CASUALE = 0.5
+for _, nome in ipairs({ "SA-8 Dietro", "Hawk Blu", "SA-3 Nuovo" }) do
   local coal = (nome == "Hawk Blu") and 2 or 1
   S[coal].batterie[nome].acceso = true; S[coal].batterie[nome].ultimoBersaglio = timer.getTime()
   STATO.allarme[nome] = 2
@@ -182,7 +193,9 @@ local harm = { getTypeName = function() return "AGM_88" end, getTarget = functio
 for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_SHOT, weapon = harm, initiator = F18 }) end
 ''')
 passo(9)
-assert allarme() == VERDE, 'batteria davanti al lanciatore: minacciata, deve spegnersi'
+L.execute('CASUALE = 0.1')
+assert allarme() == VERDE, 'bersaglio presunto (sulla prua del lanciatore): p_harm 0.60 > 0.5, deve spegnersi'
+assert allarme("SA-3 Nuovo") == ROSSO, 'minacciata ma non bersaglio presunto: p_vicine 0.35 < 0.5, resta accesa'
 assert allarme("SA-8 Dietro") == ROSSO, 'batteria alle spalle del lanciatore: non minacciata'
 assert allarme("Hawk Blu") == ROSSO, 'le batterie della coalizione che lancia non reagiscono'
 L.execute('RILEVA["Hawk Blu"] = {}')

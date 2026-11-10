@@ -31,14 +31,22 @@
   Non richiede MOOSE, MIST ne' la modifica di MissionScripting.lua.
 ]]
 
--- funziona da solo o insieme a levante_core.lua (che fornisce LEVANTE.debug e LEVANTE.annota)
-LEVANTE = LEVANTE or {}
-LEVANTE.annota = LEVANTE.annota or function() end
-if not LEVANTE.debug then
-  LEVANTE.debug = function(m)
-    env.info("[IADS DEBUG] " .. m)
-    if IADS_DEBUG then trigger.action.outText("IADS: " .. m, 10) end
-  end
+-- funziona da solo o insieme a levante_core.lua, che fornisce LEVANTE.debug e LEVANTE.annota.
+-- Lo script non crea variabili globali: LEVANTE si legge al momento della chiamata, cosi' conta anche
+-- se levante_core.lua viene caricato dopo questo file.
+local function campagna(f)
+  local L = LEVANTE
+  return type(L) == "table" and type(L[f]) == "function" and L[f] or nil
+end
+local function dbg(m)
+  local f = campagna("debug")
+  if f then return f(m) end
+  env.info("[IADS DEBUG] " .. m)
+  if IADS_DEBUG then trigger.action.outText("IADS: " .. m, 10) end
+end
+local function annota(chiave, dati)
+  local f = campagna("annota")
+  if f then f(chiave, dati) end
 end
 
 
@@ -91,7 +99,6 @@ local PROFILO_RUOLO = {   -- sensori di tipo non elencato
 }
 
 local S = {}   -- stato per coalizione: batterie, tracce
-local function dbg(m) LEVANTE.debug(m) end
 
 local function log(msg) env.info("[IADS] " .. msg) end
 
@@ -226,7 +233,8 @@ local function raccogliTracce(coal, st, ora)
       end
     end
   end
-  -- i SAM gia' accesi sono sensori anche loro (senza ritardo per se stessi, con ritardo per gli altri)
+  -- i SAM gia' accesi sono sensori anche loro, con lo stesso ritardo di rete. Per la batteria stessa il
+  -- ritardo non conta: e' gia' accesa, e in allarme RED DCS la fa ingaggiare da sola cio' che vede
   for nome, b in pairs(st.batterie) do
     if b.acceso then
       local g = gruppoVivo(nome)
@@ -367,13 +375,37 @@ local function reteVede(coal, obj)
   return false
 end
 
--- batteria accesa minacciata dal lancio: entro PORTATA_HARM e davanti al lanciatore (entro CONO_HARM)
+-- batteria accesa minacciata dal lancio: entro PORTATA_HARM e davanti al lanciatore (entro CONO_HARM).
+-- Restituisce anche il coseno dell'angolo dalla prua (1 = esattamente davanti), per il bersaglio presunto.
 local function minacciata(c, pt, prua)
   local dx, dz = c.x - pt.x, c.z - pt.z
   local d = math.sqrt(dx * dx + dz * dz)
   if d >= PORTATA_HARM then return false end
-  if not prua or d == 0 then return true end
-  return (dx * prua.x + dz * prua.z) / d >= math.cos(math.rad(CONO_HARM))
+  if not prua or d == 0 then return true, nil end
+  local coseno = (dx * prua.x + dz * prua.z) / d
+  return coseno >= math.cos(math.rad(CONO_HARM)), coseno
+end
+
+-- DCS spesso non dice il bersaglio dell'antiradar (getTarget() = nil). Bersaglio presunto: tra le
+-- batterie accese delle coalizioni nemiche del lanciatore e minacciate, quella piu' allineata con la prua.
+local function bersaglioPresunto(coalLancio, pt, prua)
+  if not prua then return nil end
+  local migliore, cosMigliore = nil, -2
+  for coal, st in pairs(S) do
+    if coal ~= coalLancio then
+      for nome, b in pairs(st.batterie) do
+        if b.acceso then
+          local g = gruppoVivo(nome)
+          local c = g and centro(g)
+          if c then
+            local si, coseno = minacciata(c, pt, prua)
+            if si and coseno and coseno > cosMigliore then migliore, cosMigliore = nome, coseno end
+          end
+        end
+      end
+    end
+  end
+  return migliore
 end
 
 local function reazioneHarm(e)
@@ -392,6 +424,10 @@ local function reazioneHarm(e)
   end)
   local bersaglio = nil
   pcall(function() local t = arma:getTarget(); bersaglio = t and t:getGroup() and t:getGroup():getName() end)
+  if not bersaglio then
+    bersaglio = bersaglioPresunto(coalLancio, pt, prua)
+    if bersaglio then dbg(bersaglio .. ": bersaglio presunto dell'antiradar (il piu' allineato con il lanciatore)") end
+  end
   for coal, st in pairs(S) do
     -- solo le reti nemiche del lanciatore, e solo se un loro radar lo vede mentre lancia
     if coal ~= coalLancio and reteVede(coal, lanciatore) then
@@ -407,7 +443,7 @@ local function reazioneHarm(e)
           end
           if p > 0 and math.random() < p then
             silenzio(nome, b, ora)
-            LEVANTE.annota("iads_silenzio_harm", { gruppo = nome })
+            annota("iads_silenzio_harm", { gruppo = nome })
             dbg(nome .. ": missile antiradar rilevato, radar in silenzio")
           end
         end
@@ -433,7 +469,7 @@ local function spostaDopoTiro(nome, b)
         { x = x, y = z, type = "Turning Point", action = "Off Road", speed = 8 },
       } } } })
       timer.scheduleFunction(function() b.inMovimento = false end, nil, timer.getTime() + d / 8 + 60)
-      LEVANTE.annota("iads_spostamento", { gruppo = nome, metri = math.floor(d) })
+      annota("iads_spostamento", { gruppo = nome, metri = math.floor(d) })
       dbg(string.format("%s: si sposta di %d m dopo il tiro", nome, math.floor(d)))
       return
     end
