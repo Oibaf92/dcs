@@ -38,6 +38,8 @@ dell'evento di lancio.
 - Sensori: ogni sensore è un gruppo. Lo script interroga **la prima unità** del gruppo, quindi in
   un gruppo radar o AWACS il radar deve essere l'unità 1.
 - I nomi dei gruppi nel Mission Editor devono coincidere esattamente con quelli della configurazione.
+  Un gruppo con il nome sbagliato viene trattato come **batteria distrutta**: sparisce dalla rete e
+  fa entrare in azione le riserve. Se una riserva si accende subito all'avvio, controlla i nomi.
 
 ## Installazione nella missione
 1. Copia `iads.lua` e il tuo file di configurazione (parti da `esempio_config.lua`) dove preferisci.
