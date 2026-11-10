@@ -42,7 +42,7 @@ dep14_approach_climb | ryan-high | Viper one one, Kutaisi Approach, radar contac
 dep15_pilota_readback | lessac-medium | Right heading one two zero, Viper one one.
 
 # --- Arrivo Kutaisi pista 07, varianti ILS e overhead (modello in FRASEOLOGIA.md) ---
-arr01_pilota_checkin | lessac-medium | Kutaisi Approach, Viper one one, flight of two, forty miles west, with information Alpha, for landing.
+arr01_pilota_checkin | lessac-medium | Kutaisi Approach, Viper one one, flight of two, with information Alpha, for landing.
 arr02_approach_descend | ryan-high | Viper one one, Kutaisi Approach, radar contact. Descend six thousand feet, Q N H one zero one five. Say type of approach.
 ils03_pilota_request | lessac-medium | Q N H one zero one five, request I L S, runway zero seven, Viper one one.
 ils04_approach_vector | ryan-high | Viper one one, turn right heading zero nine zero, descend three thousand feet, vectors for I L S approach, runway zero seven.
@@ -51,7 +51,7 @@ ils06_approach_cleared | ryan-high | Viper one one, turn left heading zero five 
 ils07_pilota_readback | lessac-medium | Left heading zero five zero, cleared I L S approach, runway zero seven, wilco, Viper one one.
 ils08_pilota_established | lessac-medium | Viper one one, established, localizer runway zero seven.
 ils09_approach_handoff | ryan-high | Viper one one, contact Kutaisi Tower, two six three decimal zero. Good day.
-ils10_pilota_tower | lessac-medium | Kutaisi Tower, Viper one one, established I L S, runway zero seven, ten miles.
+ils10_pilota_tower | lessac-medium | Kutaisi Tower, Viper one one, established I L S, runway zero seven.
 ils11_tower_land | ryan-medium | Viper one one, Kutaisi Tower, wind zero eight zero degrees, six knots, runway zero seven, cleared to land.
 ils12_pilota_readback | lessac-medium | Cleared to land, runway zero seven, Viper one one.
 ovh03_pilota_request | lessac-medium | Q N H one zero one five, request overhead, runway zero seven, Viper one one.
