@@ -9,7 +9,8 @@
 8) HARM lanciato da un aereo che nessun radar della rete vede -> nessuna reazione;
 9) HARM senza bersaglio noto da un aereo visto -> si spegne la batteria davanti al lanciatore, non quella
    alle sue spalle, e mai le batterie della coalizione che lancia;
-10) profili per tipo di unita' DCS: valore dalla tabella, dalla configurazione del gruppo, di riserva."""
+10) profili per tipo di unita' DCS: valore dalla tabella, dalla configurazione del gruppo, di riserva;
+11) l'SA-6 spara di nuovo prima dello spostamento -> si sposta solo quando ha finito di guidare."""
 import os
 from lupa import lua51
 
@@ -148,14 +149,21 @@ assert allarme("Hawk Blu") == ROSSO, 'le batterie della coalizione che lancia no
 L.execute('RILEVA["Hawk Blu"] = {}')
 passo(200)
 assert allarme() == ROSSO
-# 5) l'SA-6 spara -> spostamento
-L.execute('''
+# 5) l'SA-6 spara -> spostamento; 11) ma non finche' guida un missile sparato dopo
+def spara():
+    L.execute('''
 local sam = { getTypeName = function() return "9M336" end }
 for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_SHOT, weapon = sam,
   initiator = GRUPPI["SA-6 X"]:getUnit(1) }) end
 ''')
-passo(100)
-assert L.eval('STATO.compiti["SA-6 X"]') is not None, 'dopo il tiro deve spostarsi'
+spara()                  # t0: spostamento previsto a t0 + 90
+passo(80)
+spara()                  # t0 + 80: guida (SA-6, 60 s) fino a t0 + 140
+passo(15)                # t0 + 95
+assert L.eval('STATO.compiti["SA-6 X"]') is None, 'non deve spostarsi mentre guida un missile'
+assert allarme() == ROSSO, 'radar acceso per la guida'
+passo(50)                # t0 + 145: guida finita
+assert L.eval('STATO.compiti["SA-6 X"]') is not None, 'finita la guida deve spostarsi'
 assert allarme() == VERDE, 'si sposta a radar spento'
 # 6) EWR distrutto: rete cieca, ricerca autonoma
 passo(400)

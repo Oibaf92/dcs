@@ -223,7 +223,7 @@ stateDiagram-v2
     Accesa --> Spenta: 45 s senza bersagli, guida e ricerca finite
     Accesa --> Silenzio: antiradar (con probabilità)
     Silenzio --> Spenta: dopo 60-120 s
-    Accesa --> InMovimento: SAM mobile, 90 s dopo il tiro
+    Accesa --> InMovimento: SAM mobile, 90 s dopo il tiro e guida finita
     InMovimento --> Spenta: arrivo + 60 s
     Spenta --> [*]: gruppo distrutto
     Accesa --> [*]: gruppo distrutto
@@ -269,7 +269,10 @@ Se chi spara appartiene a una batteria configurata:
 - **Guida.** `guidaFino` diventa `ora + GUIDA[tipo]` (60 s se il tipo non è in tabella) e
   `ultimoBersaglio = ora`. Finché la guida non è finita il ciclo non spegne il radar, anche se il
   bersaglio è uscito dalla portata.
-- **Spostamento** (solo `mobile = true`). Se non ce n'è già uno programmato, fra 90 s parte
+- **Spostamento** (solo `mobile = true`). Se non ce n'è già uno programmato, ne programma uno fra
+  90 s. Allo scadere, se `guidaFino` non è ancora passato (per esempio perché la batteria ha
+  sparato di nuovo), il timer si riprogramma a `guidaFino + 1` e lo spostamento aspetta: la
+  batteria non spegne mai il radar mentre guida un missile. Finita la guida parte
   `spostaDopoTiro`: cerca fino a 8 volte un punto a caso a 800-1500 m che sia terreno o strada. Se
   lo trova spegne il radar, dà al gruppo un percorso fuori strada a 8 m/s e lo considera in
   movimento per `distanza / 8 + 60` secondi. Se non lo trova, la batteria resta ferma.
@@ -329,7 +332,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | `GUIDA` | 30-180 s | radar acceso dopo un lancio |
 | `SPENTO_HARM` | 60-120 s | silenzio dopo un antiradar (più 3-8 s di reazione) |
 | `RICERCA_OGNI`, `RICERCA_DURATA` | 300 s, 30 s | rete cieca |
-| — | 90 s | dal tiro allo spostamento di un SAM mobile |
+| — | 90 s | dal primo tiro allo spostamento di un SAM mobile (di più se la guida non è finita) |
 
 ---
 
@@ -379,7 +382,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | 4 | HARM sulla batteria accesa | silenzio, poi riaccensione |
 | 8 | HARM da un aereo che la rete non vede | nessuna reazione |
 | 9 | HARM senza bersaglio noto | si spegne la batteria davanti al lanciatore, non quella alle spalle né quella amica del lanciatore |
-| 5 | la batteria spara | si sposta a radar spento |
+| 5, 11 | la batteria spara, poi spara di nuovo prima dello spostamento | si sposta a radar spento, ma solo quando ha finito di guidare |
 | 6 | EWR distrutto | ricerca autonoma periodica |
 
 ```bash
@@ -397,9 +400,6 @@ vanno verificati in gioco.
 
 Emersi dall'analisi del codice e non ancora corretti:
 
-- **Lo spostamento può interrompere la guida.** 90 s dopo il primo tiro la batteria spegne il radar
-  e si muove anche se nel frattempo ha sparato di nuovo e ha un missile in volo (`guidaFino` non
-  viene controllato in `spostaDopoTiro`).
 - **Il sorteggio AWACS si ripete a ogni ciclo.** Con `p_passa = 0.7` una traccia ha il 70% di
   probabilità di passare *a ogni ciclo*, quindi in pochi cicli passa quasi sempre: la probabilità
   agisce più come un ritardo in più che come una perdita di tracce.

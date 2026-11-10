@@ -15,7 +15,8 @@
     (P_HARM) e quelle accese davanti al lanciatore entro PORTATA_HARM (P_HARM_VICINE). Le batterie
     della coalizione che lancia non reagiscono mai;
   - il radar resta acceso finche' guida i propri missili (GUIDA);
-  - i SAM mobili (mobile = true) dopo aver sparato si spostano di 0,8-1,5 km a radar spento;
+  - i SAM mobili (mobile = true) dopo aver sparato si spostano di 0,8-1,5 km a radar spento, non prima
+    di 90 s dal tiro e solo quando hanno finito di guidare i missili in volo;
   - le batterie di riserva (riserva = true) restano spente finche' la rete non perde una batteria.
 
   Configurazione (da caricare PRIMA di questo file):
@@ -392,8 +393,16 @@ function gestore:onEvent(e)
       end
       if b and b.mobile and not b.spostamentoPrevisto then
         b.spostamentoPrevisto = true
-        timer.scheduleFunction(function() b.spostamentoPrevisto = false; spostaDopoTiro(nome, b) end,
-          nil, timer.getTime() + 90)
+        timer.scheduleFunction(function()
+          -- missili ancora in volo (anche sparati dopo): lo spostamento aspetta la fine della guida
+          local ora = timer.getTime()
+          if ora < (b.guidaFino or 0) then
+            dbg(string.format("%s: spostamento rinviato di %d s, guida in corso", nome, math.ceil(b.guidaFino - ora)))
+            return b.guidaFino + 1
+          end
+          b.spostamentoPrevisto = false
+          spostaDopoTiro(nome, b)
+        end, nil, timer.getTime() + 90)
       end
     end
   end)

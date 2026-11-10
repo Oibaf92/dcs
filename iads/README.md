@@ -30,7 +30,8 @@ Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZI
   75%/40%, SA-15 20%/10%; per i tipi non elencati 65%/30%). Le batterie della coalizione che lancia
   non reagiscono mai. Il silenzio dura 60-120 s.
 - **Spostamento dopo il tiro.** I SAM mobili, 90 s dopo aver sparato, si spostano di 0,8-1,5 km
-  fuori strada a radar spento, poi tornano operativi.
+  fuori strada a radar spento, poi tornano operativi. Se hanno ancora missili da guidare, anche
+  sparati dopo il primo, lo spostamento aspetta la fine della guida.
 - **Rete cieca.** Se tutti i sensori della coalizione sono distrutti, le batterie accendono il
   proprio radar per 30 s ogni 5 minuti, esponendosi agli HARM.
 - **Riserva.** Le batterie con `riserva = true` restano spente finché la rete non perde la prima
