@@ -129,7 +129,8 @@ atis_<aeroporto>_<lettera> | ryan-high | <Batumi> information <Alpha>. Runway in
 
 Modello standard del repo. Una voce diversa per ente, così si capisce subito chi parla:
 pilota `lessac-medium`, Ground `alan-low`, Tower `ryan-medium`, Approach `ryan-high`.
-Coerente con l'ATIS: stessa lettera, pista e QNH. Nomi `depNN_...` per tenerli in ordine.
+Coerente con l'ATIS: stessa lettera, pista e QNH. **Il pilota non dice mai quote né velocità**:
+le sue battute restano valide qualunque cosa assegni il controllore. Nomi `depNN_...` per tenerli in ordine.
 In DCS: un trigger per battuta, con ritardo pari alla durata della battuta precedente + 1 s.
 
 ```
@@ -145,12 +146,66 @@ dep09_pilota_readback | lessac-medium | Line up and wait, runway <zero seven>, <
 dep10_tower_takeoff | ryan-medium | <Viper one one>, wind <zero eight zero> degrees, <six> knots, runway <zero seven>, cleared for takeoff.
 dep11_pilota_readback | lessac-medium | Cleared for takeoff, runway <zero seven>, <Viper one one>.
 dep12_tower_handoff | ryan-medium | <Viper one one>, contact <Kutaisi> Approach, <two five zero decimal five>. Good day.
-dep13_pilota_approach | lessac-medium | <Kutaisi> Approach, <Viper one one>, airborne, passing <two thousand> feet, climbing <six thousand> feet.
+dep13_pilota_approach | lessac-medium | <Kutaisi> Approach, <Viper one one>, airborne, climbing.
 dep14_approach_climb | ryan-high | <Viper one one>, <Kutaisi> Approach, radar contact. Climb flight level <two zero zero>, turn <right> heading <one two zero>.
-dep15_pilota_readback | lessac-medium | Climb flight level <two zero zero>, <right> heading <one two zero>, <Viper one one>.
+dep15_pilota_readback | lessac-medium | <Right> heading <one two zero>, <Viper one one>.
 ```
 
 Le frequenze sono indicative: usa quelle dell'aeroporto in DCS.
+
+### Arrivo (Approach → Tower → Ground), ILS o overhead
+
+Modello standard del repo, stesse voci della partenza. Parte comune all'inizio (`arr0x`), poi una
+delle due varianti, poi parte comune dopo l'atterraggio (`arr9x`). Come nella partenza **il
+pilota non dice mai quote né velocità**.
+
+- **Overhead** (`ovh`): il più tipico per caccia in formazione con bel tempo.
+- **ILS** (`ils`): con meteo brutto o visibilità ridotta.
+
+Comune, contatto con Approach:
+```
+arr01_pilota_checkin | lessac-medium | <Kutaisi> Approach, <Viper one one>, flight of <two>, <forty> miles <west>, with information <Alpha>, for landing.
+arr02_approach_descend | ryan-high | <Viper one one>, <Kutaisi> Approach, radar contact. Descend <six thousand> feet, Q N H <one zero one five>. Say type of approach.
+```
+
+Variante ILS:
+```
+ils03_pilota_request | lessac-medium | Q N H <one zero one five>, request I L S, runway <zero seven>, <Viper one one>.
+ils04_approach_vector | ryan-high | <Viper one one>, turn right heading <zero nine zero>, descend <three thousand> feet, vectors for I L S approach, runway <zero seven>.
+ils05_pilota_readback | lessac-medium | Right heading <zero nine zero>, <Viper one one>.
+ils06_approach_cleared | ryan-high | <Viper one one>, turn left heading <zero five zero>, cleared I L S approach, runway <zero seven>, report established.
+ils07_pilota_readback | lessac-medium | Left heading <zero five zero>, cleared I L S approach, runway <zero seven>, wilco, <Viper one one>.
+ils08_pilota_established | lessac-medium | <Viper one one>, established, localizer runway <zero seven>.
+ils09_approach_handoff | ryan-high | <Viper one one>, contact <Kutaisi> Tower, <two six three decimal zero>. Good day.
+ils10_pilota_tower | lessac-medium | <Kutaisi> Tower, <Viper one one>, established I L S, runway <zero seven>, <ten> miles.
+ils11_tower_land | ryan-medium | <Viper one one>, <Kutaisi> Tower, wind <zero eight zero> degrees, <six> knots, runway <zero seven>, cleared to land.
+ils12_pilota_readback | lessac-medium | Cleared to land, runway <zero seven>, <Viper one one>.
+```
+
+Variante overhead break:
+```
+ovh03_pilota_request | lessac-medium | Q N H <one zero one five>, request overhead, runway <zero seven>, <Viper one one>.
+ovh04_approach_initial | ryan-high | <Viper one one>, proceed direct initial, runway <zero seven>, descend <two thousand five hundred> feet, report field in sight.
+ovh05_pilota_readback | lessac-medium | Direct initial, runway <zero seven>, wilco, <Viper one one>.
+ovh06_pilota_field | lessac-medium | <Viper one one>, field in sight.
+ovh07_approach_handoff | ryan-high | <Viper one one>, contact <Kutaisi> Tower, <two six three decimal zero>. Good day.
+ovh08_pilota_tower | lessac-medium | <Kutaisi> Tower, <Viper one one>, flight of <two>, initial, runway <zero seven>, for the overhead.
+ovh09_tower_break | ryan-medium | <Viper one one>, <Kutaisi> Tower, runway <zero seven>, <left> break approved, report base, gear down.
+ovh10_pilota_base | lessac-medium | <Viper one one>, base, gear down, full stop.
+ovh11_tower_land | ryan-medium | <Viper one one>, wind <zero eight zero> degrees, <six> knots, runway <zero seven>, cleared to land.
+ovh12_pilota_readback | lessac-medium | Cleared to land, runway <zero seven>, <Viper one one>.
+```
+
+Comune, dopo l'atterraggio:
+```
+arr90_tower_vacate | ryan-medium | <Viper one one>, vacate <left> when able, contact <Kutaisi> Ground, <two five nine decimal zero>.
+arr91_pilota_readback | lessac-medium | Vacate <left>, Ground <two five nine decimal zero>, <Viper one one>.
+arr92_pilota_ground | lessac-medium | <Kutaisi> Ground, <Viper one one>, runway vacated, request taxi to parking.
+arr93_ground_taxi | alan-low | <Viper one one>, <Kutaisi> Ground, taxi to parking via taxiway <alpha>.
+arr94_pilota_readback | lessac-medium | Taxi to parking via <alpha>, <Viper one one>.
+```
+
+Frequenze, lato del break e disponibilità dell'ILS sono indicativi: controllali sull'aeroporto in DCS.
 
 ### Torre / ATC
 
