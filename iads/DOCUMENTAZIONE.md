@@ -57,7 +57,7 @@ Il file è diviso in sezioni, nell'ordine in cui le trova Lua:
 | Sezione | Contenuto principale |
 |---|---|
 | Intestazione | descrizione e formato della configurazione |
-| Compatibilità con la campagna | `dbg` e `annota`, che usano `LEVANTE` se la campagna lo fornisce (vedi §3) |
+| Messaggi di debug | `dbg` (vedi §3) |
 | Parametri | costanti regolabili (`CICLO`, `RITARDO_RETE`, `TENUTA`, `GUIDA`, `ANTIRADAR`…) |
 | Profili | `PROFILI_SAM`, `PROFILI_SENSORI`, `PROFILO_RUOLO` (vedi §7) |
 | Funzioni di servizio | `gruppoVivo`, `cercaProfilo`, `profiloSensore`, `centro`, `radar` |
@@ -73,18 +73,11 @@ Il file è diviso in sezioni, nell'ordine in cui le trova Lua:
 Nel Mission Editor un trigger MISSION START esegue prima la configurazione e poi `iads.lua`.
 Quando Lua esegue il file succede questo, in ordine:
 
-1. **Compatibilità con la campagna.** Lo script nasce dalla campagna "Fuoco sul Levante 1989",
-   che ha un proprio `levante_core.lua` con la tabella globale `LEVANTE`. `iads.lua` definisce due
-   funzioni locali:
-   - `dbg(m)` usa `LEVANTE.debug` se esiste; altrimenti scrive `[IADS DEBUG] m` nel `dcs.log` e, se
-     `IADS_DEBUG = true`, anche a schermo per 10 s;
-   - `annota(chiave, dati)` usa `LEVANTE.annota` se esiste (nella campagna registra silenzi per
-     antiradar e spostamenti); altrimenti non fa nulla.
-
-   `LEVANTE` viene letto a ogni chiamata, quindi conta anche se `levante_core.lua` viene caricato
-   dopo. Lo script non crea variabili globali: tutto il suo stato è locale.
-2. **Lettura della configurazione.** `DATI = IADS_DATI or LEVANTE_IADS or {}`. Il secondo nome è
-   quello usato dalla campagna.
+1. **Messaggi di debug.** La funzione locale `dbg(m)` scrive `[IADS DEBUG] m` nel `dcs.log` e, se
+   `IADS_DEBUG = true`, anche a schermo per 10 s. Lo script è autonomo: non dipende da altri script
+   e non crea variabili globali, tutto il suo stato è locale.
+2. **Lettura della configurazione.** `DATI = IADS_DATI or {}`: senza configurazione lo script non
+   gestisce nessuna batteria.
 3. **Registrazione del gestore degli eventi** con `world.addEventHandler(gestore)`.
 4. **Costruzione dello stato**, per ogni coalizione presente in `DATI`:
    - ogni SAM diventa una *batteria* in `S[coal].batterie`. Se il gruppo esiste ed è attivo, entra

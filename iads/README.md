@@ -2,8 +2,8 @@
 
 Script Lua per DCS World che gestisce i radar dei SAM come una vera rete di difesa aerea integrata.
 Le batterie tengono il radar spento e lo accendono solo quando la rete ha davvero visto un
-bersaglio. Estratto dalla campagna dinamica "Fuoco sul Levante 1989"; funziona da solo, senza
-MOOSE, MIST o altri script.
+bersaglio. È autonomo: funziona da solo, senza MOOSE, MIST o altri script, e non crea variabili
+globali.
 
 Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZIONE.md](DOCUMENTAZIONE.md).
 
@@ -140,8 +140,8 @@ sulla tabella; un tipo non elencato usa i valori di riserva.
 I valori sono una prima stima da regolare in gioco. I nomi dei tipi vanno verificati nel `dcs.log`:
 per i sistemi di mod va aggiunta una riga con il loro nome.
 
-Portate usate nella campagna (metri): SA-2 40000, SA-3 22000, SA-5 150000, SA-6 25000,
-SA-8 10000, I-Hawk 35000.
+Portate indicative (metri): SA-2 40000, SA-3 22000, SA-5 150000, SA-6 25000, SA-8 10000,
+I-Hawk 35000.
 
 ### Parametri regolabili (in testa a `iads.lua`)
 | Costante | Valore | Effetto |

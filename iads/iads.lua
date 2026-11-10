@@ -1,6 +1,6 @@
 --[[
   IADS per DCS World - rete di difesa aerea "senza onniscienza"
-  (estratto dalla campagna "Fuoco sul Levante 1989"; istruzioni complete in README.md)
+  (istruzioni complete in README.md, funzionamento del codice in DOCUMENTAZIONE.md)
 
   - i radar di tiro dei SAM stanno SPENTI e si accendono solo quando la rete segnala un bersaglio
     dentro la loro portata, per il tempo necessario;
@@ -25,32 +25,20 @@
       sensori = { ["gruppo EWR"] = "radar", ["gruppo AWACS"] = "awacs", ["gruppo carri"] = "vista", ... } } }
   Facoltativi: nei SAM p_harm e p_vicine; un sensore puo' essere { ruolo = "awacs", p_passa = ..., ritardo = ... }.
   Senza questi valori valgono i profili per tipo di unita' DCS (PROFILI_SAM, PROFILI_SENSORI).
-  (accettato anche il nome LEVANTE_IADS usato dalla campagna)
   IADS_DEBUG = true  -> messaggi a schermo quando una batteria accende o spegne il radar.
 
   Non richiede MOOSE, MIST ne' la modifica di MissionScripting.lua.
 ]]
 
--- funziona da solo o insieme a levante_core.lua, che fornisce LEVANTE.debug e LEVANTE.annota.
--- Lo script non crea variabili globali: LEVANTE si legge al momento della chiamata, cosi' conta anche
--- se levante_core.lua viene caricato dopo questo file.
-local function campagna(f)
-  local L = LEVANTE
-  return type(L) == "table" and type(L[f]) == "function" and L[f] or nil
-end
+-- Script autonomo: non dipende da altri script e non crea variabili globali.
+
+-- messaggi di debug: sempre nel dcs.log, a schermo solo con IADS_DEBUG = true
 local function dbg(m)
-  local f = campagna("debug")
-  if f then return f(m) end
   env.info("[IADS DEBUG] " .. m)
   if IADS_DEBUG then trigger.action.outText("IADS: " .. m, 10) end
 end
-local function annota(chiave, dati)
-  local f = campagna("annota")
-  if f then f(chiave, dati) end
-end
 
-
-local DATI = IADS_DATI or LEVANTE_IADS or {}
+local DATI = IADS_DATI or {}
 local CICLO = 10                 -- s tra due controlli della rete
 local RITARDO_RETE = 8           -- s dall'avvistamento alla batteria
 local RITARDO_AWACS = 20         -- s in piu' per i dati dell'AWACS
@@ -443,7 +431,6 @@ local function reazioneHarm(e)
           end
           if p > 0 and math.random() < p then
             silenzio(nome, b, ora)
-            annota("iads_silenzio_harm", { gruppo = nome })
             dbg(nome .. ": missile antiradar rilevato, radar in silenzio")
           end
         end
@@ -469,7 +456,6 @@ local function spostaDopoTiro(nome, b)
         { x = x, y = z, type = "Turning Point", action = "Off Road", speed = 8 },
       } } } })
       timer.scheduleFunction(function() b.inMovimento = false end, nil, timer.getTime() + d / 8 + 60)
-      annota("iads_spostamento", { gruppo = nome, metri = math.floor(d) })
       dbg(string.format("%s: si sposta di %d m dopo il tiro", nome, math.floor(d)))
       return
     end
