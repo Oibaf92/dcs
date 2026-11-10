@@ -27,3 +27,5 @@ end
 trigger = { action = { outText = function(t) table.insert(MOCK.testi, t); print("TESTO: " .. t) end } }
 Group = {}
 Unit = {}
+Object = { Category = { UNIT = 1, WEAPON = 2, STATIC = 3, BASE = 4, SCENERY = 5, CARGO = 6 } }
+function Object.getCategory(o) return o:getCategory() end

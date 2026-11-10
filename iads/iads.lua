@@ -89,6 +89,10 @@ local function raccogliTracce(coal, st, ora)
   local nemico = (coal == 1) and 2 or 1
   local function aggiungi(obj, ritardo)
     if not obj or not obj.isExist or not obj:isExist() then return end
+    -- solo unita': getDetectedTargets puo' restituire anche armi (missili, proiettili), e per
+    -- un'arma getDesc().category usa Weapon.Category (MISSILE = 1 come HELICOPTER, SHELL = 0 come AIRPLANE)
+    local oko, tipo = pcall(Object.getCategory, obj)
+    if not oko or tipo ~= Object.Category.UNIT then return end
     local ok, c = pcall(function() return obj:getCoalition() end)
     if not ok or c ~= nemico then return end
     local okc, cat = pcall(function() return obj:getDesc().category end)

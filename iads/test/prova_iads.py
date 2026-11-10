@@ -4,7 +4,8 @@
 3) bersaglio uscito dalla portata -> spegnimento dopo la tenuta;
 4) HARM sull'SA-6 acceso -> silenzio (con probabilita', qui forzata);
 5) l'SA-6 spara -> si sposta a radar spento;
-6) radar di sorveglianza distrutto -> rete cieca, ricerca autonoma periodica."""
+6) radar di sorveglianza distrutto -> rete cieca, ricerca autonoma periodica;
+7) la rete rileva solo armi (HARM, proiettile) -> l'SA-6 resta spento: contano solo aerei ed elicotteri."""
 import os
 from lupa import lua51
 
@@ -21,12 +22,21 @@ STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true
 RILEVA = {}          -- RILEVA[nome sensore] = lista di oggetti rilevati
 local function aereo(nome, x, z)
   return { getName = function() return nome end, isExist = function() return true end,
-           getCoalition = function() return 2 end, getDesc = function() return { category = 0 } end,
+           getCategory = function() return Object.Category.UNIT end, getCoalition = function() return 2 end, getDesc = function() return { category = 0 } end,
            getPoint = function() return { x = x, y = 1000, z = z } end }
 end
 F18 = aereo("F18", 15000, 0)
 BASSO = aereo("BASSO", 5000, 0)
 LONTANO = aereo("LONTANO", 80000, 0)
+-- armi rilevate: per un'arma getDesc().category e' Weapon.Category (MISSILE = 1, SHELL = 0)
+local function arma(nome, cat, x, z)
+  return { getName = function() return nome end, isExist = function() return true end,
+           getCategory = function() return Object.Category.WEAPON end, getCoalition = function() return 2 end,
+           getDesc = function() return { category = cat } end,
+           getPoint = function() return { x = x, y = 3000, z = z } end }
+end
+HARM_VOLO = arma("AGM_88", 1, 10000, 0)
+PROIETTILE = arma("M61_20_HE", 0, 5000, 0)
 local function gruppo(nome, x, z)
   local ctrl = { setOption = function(_, id, v) STATO.allarme[nome] = v end,
                  setTask = function(_, t) STATO.compiti[nome] = t end,
@@ -56,6 +66,10 @@ def allarme():
 
 passo(6)
 assert allarme() == VERDE, 'all\'avvio i radar devono essere spenti'
+# 7) solo armi rilevate: nessuna accensione
+L.execute('RILEVA["EWR"] = { HARM_VOLO, PROIETTILE }')
+passo(40)
+assert allarme() == VERDE, 'missili e proiettili rilevati non devono accendere la batteria'
 # 2) aereo vicino ma non rilevato
 L.execute('RILEVA["EWR"] = {}')
 passo(30)
