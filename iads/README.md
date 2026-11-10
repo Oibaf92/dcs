@@ -5,6 +5,8 @@ Le batterie tengono il radar spento e lo accendono solo quando la rete ha davver
 bersaglio. Estratto dalla campagna dinamica "Fuoco sul Levante 1989"; funziona da solo, senza
 MOOSE, MIST o altri script.
 
+Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZIONE.md](DOCUMENTAZIONE.md).
+
 ## Cosa fa
 - **Radar spenti di default.** All'avvio tutti i SAM della configurazione vanno in allarme GREEN
   con emissioni spente. Una batteria si accende quando una traccia della rete entra nell'85% della
