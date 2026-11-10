@@ -109,6 +109,22 @@ jtac_cleared | ryan-medium | <Viper one one>, cleared hot.
 jtac_bda | ryan-medium | Good hits, target destroyed.
 ```
 
+### ATIS
+
+Modello standard del repo. **Senza orario**: così lo stesso file vale per tutta la missione e
+non servono più versioni quasi uguali. Velocità `1.0` (più scandito del default) e in DCS va
+trasmesso con `RADIO TRANSMISSION` in **loop** (vedi [DCS.md](DCS.md)). Se cambia il meteo o la
+pista, nuovo file con la lettera successiva (`Bravo`, `Charlie`, ...).
+
+```
+atis_<aeroporto>_<lettera> | ryan-high | <Batumi> information <Alpha>. Runway in use, <one three>. Wind, <one two zero> degrees, <eight> knots. Visibility, <one zero> kilometers. Clouds, <scattered>, <three thousand> feet. Temperature, <one eight>. Dew point, <one two>. Q N H, <one zero one three>. Transition altitude, <six thousand> feet. <Bird activity in the vicinity of the airfield.> Advise on initial contact you have information <Alpha>. | 1.0
+```
+
+- Vento calmo: `Wind, calm.`; visibilità oltre 10 km: `Visibility, one zero kilometers or more.`
+- Cielo sereno: `Sky clear.` al posto di `Clouds, ...`
+- La riga di avviso (`Bird activity...`) è facoltativa: toglila o sostituiscila
+  (es. `Runway one three, work in progress.`).
+
 ### Torre / ATC
 
 ```

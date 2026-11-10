@@ -20,3 +20,6 @@ viper12_bingo | lessac-medium | Viper one two, bingo fuel, R T B.
 
 # --- Fine missione ---
 awacs_rtb | ryan-high | Viper one one, Overlord, picture clean, cleared R T B, good hunting.
+
+# --- ATIS (modello in FRASEOLOGIA.md; in DCS: RADIO TRANSMISSION in loop) ---
+atis_batumi_alpha | ryan-high | Batumi information Alpha. Runway in use, one three. Wind, one two zero degrees, eight knots. Visibility, one zero kilometers. Clouds, scattered, three thousand feet. Temperature, one eight. Dew point, one two. Q N H, one zero one three. Transition altitude, six thousand feet. Bird activity in the vicinity of the airfield. Advise on initial contact you have information Alpha. | 1.0
