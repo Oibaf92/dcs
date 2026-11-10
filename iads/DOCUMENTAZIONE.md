@@ -35,7 +35,7 @@ Lo script è un unico file senza dipendenze (niente MOOSE, MIST o modifiche a
 | Meccanismo | Frequenza | Cosa fa |
 |---|---|---|
 | `giro` → `ciclo` | ogni `CICLO` = 10 s, per coalizione | raccoglie le tracce dai sensori e decide quali batterie accendere o spegnere |
-| `gestore:onEvent` | a ogni `S_EVENT_SHOT` | reagisce ai lanci: antiradar nemici, oppure missili sparati dalle batterie |
+| `gestore:onEvent` | a ogni `S_EVENT_SHOT` e `S_EVENT_BIRTH` | reagisce ai lanci (antiradar nemici, missili sparati dalle batterie) e fa entrare nella rete le batterie che compaiono |
 
 ---
 
@@ -84,9 +84,10 @@ Quando Lua esegue il file succede questo, in ordine:
    quello usato dalla campagna.
 3. **Registrazione del gestore degli eventi** con `world.addEventHandler(gestore)`.
 4. **Costruzione dello stato**, per ogni coalizione presente in `DATI`:
-   - ogni SAM diventa una *batteria* in `S[coal].batterie`. Lo script cerca il profilo del suo tipo
-     di radar (§7), scrive nel `dcs.log` il profilo trovato e mette il gruppo a radar spento
-     (`radar(nome, false)`, protetto da `pcall` perché il gruppo potrebbe non esistere);
+   - ogni SAM diventa una *batteria* in `S[coal].batterie`. Se il gruppo esiste ed è attivo, entra
+     subito nella rete con `entraInRete`: profilo del tipo di radar (§7), radar spento, riga nel
+     `dcs.log`. Altrimenti resta **in attesa** (`presente = false`) e il log lo dice: entrerà nella
+     rete quando compare (§5.2 e §6.3);
    - ogni sensore diventa una voce in `S[coal].sensori`. Il sensore può essere scritto come stringa
      (`"radar"`) o come tabella (`{ ruolo = "awacs", p_passa = 0.6 }`); entrambe le forme diventano
      `{ ruolo, cfg }`. Il profilo del sensore si risolve più tardi, la prima volta che il gruppo
@@ -119,6 +120,7 @@ S[coal] = {
   tracce        = { [nome unità nemica] = traccia },
   sensoriVivi   = numero di gruppi sensore ancora vivi (aggiornato a ogni ciclo),
   batteriaPersa = true dopo la prima batteria distrutta (sveglia le riserve),
+                  -- una batteria mai comparsa non conta come distrutta
 }
 ```
 
@@ -126,6 +128,8 @@ S[coal] = {
 
 | Campo | Da dove viene | Significato |
 |---|---|---|
+| `cfg` | configurazione | la configurazione originale del gruppo |
+| `presente` | stato | il gruppo è nella rete: esiste, è attivo ed è entrato con `entraInRete` |
 | `tipo` | configurazione | etichetta del sistema (`sa2`, `sa6`…), usata per il tempo di guida `GUIDA` |
 | `portata` | configurazione | portata in metri; la batteria si accende entro `portata * ATTIVAZIONE` |
 | `mobile` | configurazione | se `true` si sposta dopo il tiro |
@@ -206,12 +210,18 @@ un aereo già noto alla rete non ricomincia ad aspettare il ritardo.
 
 Per ogni batteria, nell'ordine:
 
-1. **Gruppo distrutto o inesistente** → la batteria esce dalla rete. Alla prima perdita
-   `batteriaPersa` diventa `true` e le riserve si attivano. Attenzione: un gruppo con il nome
-   sbagliato, o ad attivazione ritardata, è trattato come distrutto.
-2. **Riserva non ancora attivata** → nessuna azione: resta spenta.
-3. **In silenzio da antiradar o in movimento** → nessuna azione.
-4. Altrimenti lo script cerca una traccia **pronta** (`pronto <= ora`) entro `portata * ATTIVAZIONE`
+1. **Gruppo assente** (non esiste, non ha unità o non è ancora attivato; vedi `gruppoVivo`):
+   - se la batteria era nella rete, è **distrutta**: `presente = false`, esce dalla rete e, alla
+     prima perdita, `batteriaPersa` diventa `true` e le riserve si attivano;
+   - se non c'è mai stata (attivazione ritardata, creata più avanti, nome sbagliato) resta in
+     attesa senza conseguenze.
+   La voce della batteria non viene cancellata: se il gruppo ricompare con lo stesso nome (per
+   esempio ricreato da un altro script) può rientrare.
+2. **Gruppo presente ma batteria non ancora nella rete** → `entraInRete`: riparte da zero (stato
+   azzerato, profilo del tipo DCS) a radar spento.
+3. **Riserva non ancora attivata** → nessuna azione: resta spenta.
+4. **In silenzio da antiradar o in movimento** → nessuna azione.
+5. Altrimenti lo script cerca una traccia **pronta** (`pronto <= ora`) entro `portata * ATTIVAZIONE`
    dal centro del gruppo (distanza orizzontale, quota esclusa):
    - **c'è** → `ultimoBersaglio = ora`; se il radar era spento lo accende;
    - **non c'è, il radar è acceso**, sono passati più di `TENUTA` (45 s) dall'ultimo bersaglio e
@@ -225,8 +235,10 @@ Per ogni batteria, nell'ordine:
 
 ```mermaid
 stateDiagram-v2
+    [*] --> InAttesa: gruppo non presente all'avvio
     [*] --> Spenta: avvio
     [*] --> Riserva: riserva = true
+    InAttesa --> Spenta: il gruppo compare (attivazione, creazione)
     Riserva --> Spenta: la rete perde una batteria
     Spenta --> Accesa: traccia pronta in portata
     Spenta --> Accesa: rete cieca, ricerca ogni 300 s
@@ -235,8 +247,9 @@ stateDiagram-v2
     Silenzio --> Spenta: dopo 60-120 s
     Accesa --> InMovimento: SAM mobile, 90 s dopo il tiro e guida finita
     InMovimento --> Spenta: arrivo + 60 s
-    Spenta --> [*]: gruppo distrutto
-    Accesa --> [*]: gruppo distrutto
+    Spenta --> Distrutta: gruppo distrutto
+    Accesa --> Distrutta: gruppo distrutto
+    Distrutta --> Spenta: ricreato con lo stesso nome
 ```
 
 "Silenzio" e "InMovimento" sono batterie con `acceso = false` che il ciclo salta finché
@@ -247,8 +260,9 @@ batteria torna normale e, se c'è una traccia in portata, si riaccende al ciclo 
 
 ## 6. Gli eventi di lancio
 
-`gestore:onEvent` considera solo `S_EVENT_SHOT`. Il corpo è dentro un `pcall`: un errore viene
-scritto nel log (`[IADS] errore evento: ...`) senza interrompere la missione.
+`gestore:onEvent` considera `S_EVENT_SHOT` (§6.1, §6.2) e `S_EVENT_BIRTH` (§6.3). Il corpo è
+dentro un `pcall`: un errore viene scritto nel log (`[IADS] errore evento: ...`) senza
+interrompere la missione.
 
 ### 6.1 Antiradar (`eAntiradar` → `reazioneHarm`)
 
@@ -288,6 +302,14 @@ Se chi spara appartiene a una batteria configurata:
   lo trova spegne il radar, dà al gruppo un percorso fuori strada a 8 m/s e lo considera in
   movimento per `distanza / 8 + 60` secondi. Se non lo trova, la batteria resta ferma.
 
+### 6.3 Nascita di un'unità
+
+Quando un gruppo ad attivazione ritardata viene attivato, o un gruppo viene creato durante la
+missione, DCS genera `S_EVENT_BIRTH` per le sue unità. Se il gruppo è una batteria in attesa,
+`nascita` la fa entrare subito nella rete con `entraInRete`, a radar spento. Senza l'evento la
+batteria entrerebbe comunque al ciclo successivo (entro 10 s), ma nel frattempo il SAM
+emetterebbe con le impostazioni di default del Mission Editor.
+
 ---
 
 ## 7. Profili per tipo di radar
@@ -307,11 +329,12 @@ compare nella tabella. Per ogni valore vale la priorità:
 2. valore del profilo trovato in tabella;
 3. valore di riserva (`P_HARM`, `P_HARM_VICINE`, `PROFILO_RUOLO`).
 
-I profili dei SAM si risolvono all'avvio; quelli dei sensori la prima volta che il gruppo esiste.
+I profili dei SAM si risolvono quando la batteria entra nella rete (all'avvio o quando il gruppo
+compare); quelli dei sensori la prima volta che il gruppo esiste.
 In entrambi i casi il risultato va nel `dcs.log`, per esempio:
 
 ```
-[IADS] SA-6 Bekaa: profilo Kub 1S91 str, silenzio bersaglio 0.60, minacciata 0.30
+[IADS] SA-6 Bekaa: nella rete, radar spento; profilo Kub 1S91 str, silenzio bersaglio 0.60, minacciata 0.30
 [IADS] sensore AWACS Rosso (awacs): profilo A-50, passa 0.80, ritardo +15 s
 ```
 
@@ -364,7 +387,8 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | `Weapon.getTypeName`, `getTarget` | riconoscere un antiradar e il suo bersaglio |
 | `land.getSurfaceType` | punto di arrivo dello spostamento |
 | `timer.getTime`, `timer.scheduleFunction` | ciclo, ritardi, silenzi, fine dello spostamento |
-| `world.addEventHandler` | evento `S_EVENT_SHOT` |
+| `world.addEventHandler` | eventi `S_EVENT_SHOT` e `S_EVENT_BIRTH` |
+| `Unit.isActive` | escludere i gruppi ad attivazione ritardata non ancora attivati |
 | `env.info`, `trigger.action.outText` | log e messaggi di debug |
 
 ---
@@ -396,6 +420,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | 8 | HARM da un aereo che la rete non vede | nessuna reazione |
 | 9 | HARM senza bersaglio noto | si spegne la batteria davanti al lanciatore, non quella alle spalle né quella amica del lanciatore |
 | 5, 11 | la batteria spara, poi spara di nuovo prima dello spostamento | si sposta a radar spento, ma solo quando ha finito di guidare |
+| 13 | gruppi assenti all'avvio, poi attivati o creati; distrutto e ricreato | in attesa senza svegliare le riserve; entrano nella rete a radar spento; il distrutto rientra |
 | 6 | EWR distrutto | ricerca autonoma periodica |
 | 12 | AWACS E-2C: primo sorteggio fallito, poi contatto perso e ritrovato | il contatto non passa finché l'AWACS lo segue; ritrovato dopo 30 s, nuovo sorteggio |
 
@@ -414,8 +439,6 @@ vanno verificati in gioco.
 
 Emersi dall'analisi del codice e non ancora corretti:
 
-- **Gruppi ad attivazione ritardata o creati durante la missione.** Al primo ciclo risultano
-  distrutti: escono dalla rete e attivano le riserve.
 - **Rete cieca.** Una configurazione senza sensori è cieca fin dall'inizio; e tutte le batterie
   fanno la ricerca autonoma nello stesso istante, non sfalsate.
 - **Bersaglio dell'antiradar.** DCS spesso non fornisce il bersaglio (`getTarget()` restituisce

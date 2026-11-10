@@ -94,10 +94,15 @@ local function dbg(m) LEVANTE.debug(m) end
 
 local function log(msg) env.info("[IADS] " .. msg) end
 
+-- gruppo esistente, con unita' e attivo (un gruppo ad attivazione ritardata non ancora attivato
+-- esiste per DCS ma non conta: ha Unit:isActive() == false)
 local function gruppoVivo(nome)
   local g = Group.getByName(nome)
-  if g and g:isExist() and g:getSize() > 0 then return g end
-  return nil
+  if not (g and g:isExist() and g:getSize() > 0) then return nil end
+  local u = (g:getUnits() or {})[1]
+  local ok, attivo = pcall(function() return u:isActive() end)
+  if ok and attivo == false then return nil end
+  return g
 end
 
 -- primo tipo di unita' del gruppo presente nella tabella: profilo e nome del tipo
@@ -141,6 +146,20 @@ local function radar(nome, acceso)
   local c = g:getController()
   c:setOption(AI.Option.Ground.id.ALARM_STATE,
     acceso and AI.Option.Ground.val.ALARM_STATE.RED or AI.Option.Ground.val.ALARM_STATE.GREEN)
+end
+
+-- una batteria entra nella rete quando il suo gruppo compare: all'avvio, all'attivazione ritardata,
+-- quando viene creato durante la missione o ricreato con lo stesso nome. Riparte da zero, a radar spento.
+local function entraInRete(nome, b, g)
+  local prof, tipo = cercaProfilo(g, PROFILI_SAM)
+  prof = prof or {}
+  b.p_harm = b.cfg.p_harm or prof.p_harm or P_HARM
+  b.p_vicine = b.cfg.p_vicine or prof.p_vicine or P_HARM_VICINE
+  b.presente, b.acceso, b.inMovimento = true, false, false
+  b.ultimoBersaglio, b.guidaFino, b.silenzioFino, b.ricercaFino, b.ultimaRicerca = nil, nil, nil, nil, nil
+  pcall(radar, nome, false)
+  log(string.format("%s: nella rete, radar spento; profilo %s, silenzio bersaglio %.2f, minacciata %.2f",
+    nome, tipo or "di riserva", b.p_harm, b.p_vicine))
 end
 
 ------------------------------------------------------------------------
@@ -240,13 +259,20 @@ local function ciclo(coal, ora)
   for nome, b in pairs(st.batterie) do
     local g = gruppoVivo(nome)
     if not g then
-      st.batterie[nome] = nil
-      if not st.batteriaPersa then
-        st.batteriaPersa = true
-        for n2, b2 in pairs(st.batterie) do
-          if b2.riserva then dbg(n2 .. ": la rete ha perso " .. nome .. ", la riserva entra in azione") end
+      -- era nella rete: distrutta. Se non c'e' mai stata (attivazione ritardata, creata dopo, nome
+      -- sbagliato) resta in attesa senza conseguenze.
+      if b.presente then
+        b.presente, b.acceso = false, false
+        log(nome .. ": distrutta, esce dalla rete")
+        if not st.batteriaPersa then
+          st.batteriaPersa = true
+          for n2, b2 in pairs(st.batterie) do
+            if b2.riserva and b2.presente then dbg(n2 .. ": la rete ha perso " .. nome .. ", la riserva entra in azione") end
+          end
         end
       end
+    elseif not b.presente then
+      entraInRete(nome, b, g)
     elseif b.riserva and not st.batteriaPersa then
       -- riserva: resta spenta e nascosta finche' la rete non perde una batteria
     elseif ora >= (b.silenzioFino or 0) and not b.inMovimento then
@@ -400,7 +426,27 @@ local function spostaDopoTiro(nome, b)
 end
 
 local gestore = {}
+-- nascita di un'unita' (attivazione ritardata o gruppo creato): se e' di una batteria in attesa la fa
+-- entrare subito nella rete, senza aspettare il ciclo (che comunque la troverebbe entro CICLO s)
+local function nascita(e)
+  local g = e.initiator and e.initiator.getGroup and e.initiator:getGroup()
+  if not g then return end
+  local nome = g:getName()
+  for _, st in pairs(S) do
+    local b = st.batterie[nome]
+    if b and not b.presente then
+      local gv = gruppoVivo(nome)
+      if gv then entraInRete(nome, b, gv) end
+    end
+  end
+end
+
 function gestore:onEvent(e)
+  if e.id == world.event.S_EVENT_BIRTH then
+    local ok, err = pcall(nascita, e)
+    if not ok then log("errore evento: " .. tostring(err)) end
+    return
+  end
   if e.id ~= world.event.S_EVENT_SHOT then return end
   local ok, err = pcall(function()
     if eAntiradar(e.weapon) then reazioneHarm(e) return end
@@ -440,17 +486,16 @@ for coal, d in pairs(DATI) do
   S[coal] = { batterie = {}, tracce = {}, sensori = {}, sensoriVivi = 0 }
   local n = 0
   for nome, cfg in pairs(d.sam or {}) do
-    -- probabilita' di silenzio: configurazione del gruppo > tabella per tipo DCS > valori di riserva
-    local g = gruppoVivo(nome)
-    local prof, tipo = nil, nil
-    if g then prof, tipo = cercaProfilo(g, PROFILI_SAM) end
-    prof = prof or {}
-    local b = { tipo = cfg.tipo, portata = cfg.portata, mobile = cfg.mobile, riserva = cfg.riserva, acceso = false,
-                p_harm = cfg.p_harm or prof.p_harm or P_HARM, p_vicine = cfg.p_vicine or prof.p_vicine or P_HARM_VICINE }
+    local b = { tipo = cfg.tipo, portata = cfg.portata, mobile = cfg.mobile, riserva = cfg.riserva, cfg = cfg,
+                acceso = false, presente = false,
+                p_harm = cfg.p_harm or P_HARM, p_vicine = cfg.p_vicine or P_HARM_VICINE }
     S[coal].batterie[nome] = b
-    log(string.format("%s: profilo %s, silenzio bersaglio %.2f, minacciata %.2f",
-      nome, tipo or "di riserva", b.p_harm, b.p_vicine))
-    pcall(radar, nome, false)
+    local g = gruppoVivo(nome)
+    if g then
+      entraInRete(nome, b, g)   -- profilo del tipo DCS e radar spento
+    else
+      log(nome .. ": gruppo non presente, in attesa (attivazione ritardata, creato durante la missione o nome sbagliato)")
+    end
     n = n + 1
   end
   -- sensori: "ruolo" oppure { ruolo = "...", p_passa = ..., ritardo = ... }

@@ -38,9 +38,12 @@ Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZI
   proprio radar per 30 s ogni 5 minuti, esponendosi agli HARM.
 - **Riserva.** Le batterie con `riserva = true` restano spente finché la rete non perde la prima
   batteria.
+- **Gruppi che compaiono dopo.** Un SAM ad attivazione ritardata, creato durante la missione o
+  ricreato con lo stesso nome dopo essere stato distrutto entra nella rete quando compare, a radar
+  spento. Finché non c'è resta in attesa: non conta come batteria distrutta e non sveglia le riserve.
 
 Il carico sul simulatore è basso: un solo controllo della rete ogni 10 s più un gestore
-dell'evento di lancio.
+degli eventi di lancio e di nascita delle unità.
 
 ## Requisiti
 - DCS World 2.9 (provato con 2.9.31, Syria). Non serve modificare `MissionScripting.lua`.
@@ -49,8 +52,9 @@ dell'evento di lancio.
 - Sensori: ogni sensore è un gruppo. Lo script interroga **la prima unità** del gruppo, quindi in
   un gruppo radar o AWACS il radar deve essere l'unità 1.
 - I nomi dei gruppi nel Mission Editor devono coincidere esattamente con quelli della configurazione.
-  Un gruppo con il nome sbagliato viene trattato come **batteria distrutta**: sparisce dalla rete e
-  fa entrare in azione le riserve. Se una riserva si accende subito all'avvio, controlla i nomi.
+  Un gruppo con il nome sbagliato non entra mai nella rete: nel `dcs.log` compare
+  `[IADS] <nome>: gruppo non presente, in attesa (...)`. Se la riga riguarda un gruppo che dovrebbe
+  esistere fin dall'inizio, controlla il nome.
 
 ## Installazione nella missione
 1. Copia `iads.lua` e il tuo file di configurazione (parti da `esempio_config.lua`) dove preferisci.
@@ -63,7 +67,8 @@ dell'evento di lancio.
    configurazione può stare in un'azione **DO SCRIPT** incollata direttamente.
 3. Salva e vola. Nel `dcs.log` deve comparire una riga per coalizione:
    `[IADS] coalizione 1: N batterie, radar spenti`, e una riga per batteria e per sensore con il
-   profilo riconosciuto (`[IADS] SA-6 Bekaa: profilo Kub 1S91 str, ...`). "di riserva" vuol dire che
+   profilo riconosciuto (`[IADS] SA-6 Bekaa: nella rete, radar spento; profilo Kub 1S91 str, ...`).
+   "di riserva" vuol dire che
    nessun tipo di unità del gruppo è nelle tabelle.
 
 Con `IADS_DEBUG = true` ogni accensione e spegnimento compare a schermo; i messaggi vanno sempre

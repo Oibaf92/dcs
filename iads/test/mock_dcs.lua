@@ -1,7 +1,7 @@
 -- Ambiente DCS simulato, minimo, per provare iads.lua fuori dal gioco.
 MOCK = { testi = {}, timers = {}, handlers = {} }
 env = { info = function(m) print("ENV: " .. m) end }
-world = { event = { S_EVENT_SHOT = 1 } }
+world = { event = { S_EVENT_SHOT = 1, S_EVENT_BIRTH = 15 } }
 function world.addEventHandler(h) table.insert(MOCK.handlers, h) end
 land = { SurfaceType = { LAND = 1, SHALLOW_WATER = 2, WATER = 3, ROAD = 4, RUNWAY = 5 } }
 function land.getSurfaceType(p) return 1 end

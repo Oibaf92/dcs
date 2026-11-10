@@ -12,7 +12,10 @@
 10) profili per tipo di unita' DCS: valore dalla tabella, dalla configurazione del gruppo, di riserva;
 11) l'SA-6 spara di nuovo prima dello spostamento -> si sposta solo quando ha finito di guidare;
 12) AWACS: un solo sorteggio per contatto. Un contatto non passato resta non passato finche' l'AWACS
-    lo segue; perso per piu' di 30 s e ritrovato, viene sorteggiato di nuovo."""
+    lo segue; perso per piu' di 30 s e ritrovato, viene sorteggiato di nuovo;
+13) gruppi non ancora presenti: ad attivazione ritardata o creati durante la missione restano in attesa
+    (non sono distrutti, non svegliano le riserve) ed entrano nella rete a radar spento quando compaiono;
+    una batteria distrutta che ricompare con lo stesso nome rientra nella rete."""
 import os
 from lupa import lua51
 
@@ -25,8 +28,8 @@ Controller = { Detection = { VISUAL = 1, OPTIC = 2, RADAR = 4 } }
 AI = { Option = { Ground = { id = { ALARM_STATE = 9 }, val = { ALARM_STATE = { AUTO = 0, GREEN = 1, RED = 2 } } } } }
 land.SurfaceType = { LAND = 1, SHALLOW_WATER = 2, WATER = 3, ROAD = 4, RUNWAY = 5 }
 land.getSurfaceType = function() return 1 end
-STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true, ["SA-8 Dietro"] = true, ["Hawk Blu"] = true,
-                                             ["AWACS Blu"] = true } }
+STATO = { allarme = {}, compiti = {}, attivo = { ["SA-6 Tardi"] = false }, vivi = { ["SA-6 X"] = true, ["EWR"] = true, ["SA-8 Dietro"] = true, ["Hawk Blu"] = true,
+                                             ["AWACS Blu"] = true, ["SA-6 Tardi"] = true } }
 RILEVA = {}          -- RILEVA[nome sensore] = lista di oggetti rilevati
 local function aereo(nome, x, z, coal)
   return { getName = function() return nome end, isExist = function() return true end,
@@ -55,7 +58,8 @@ local function gruppo(nome, x, z, tipo)
                  isTargetDetected = function(_, o) for _, t in ipairs(RILEVA[nome] or {}) do if t == o then return true, true end end
                                                    return false, false end }
   local unita = { getPoint = function() return { x = x, y = 0, z = z } end, getController = function() return ctrl end,
-                  getGroup = function() return GRUPPI[nome] end, getTypeName = function() return tipo end }
+                  getGroup = function() return GRUPPI[nome] end, getTypeName = function() return tipo end,
+                  isActive = function() return STATO.attivo[nome] ~= false end }
   return { isExist = function() return STATO.vivi[nome] == true end, getSize = function() return STATO.vivi[nome] and 1 or 0 end,
            getUnits = function() return { unita } end, getUnit = function() return unita end,
            getController = function() return ctrl end, getName = function() return nome end }
@@ -63,11 +67,15 @@ end
 GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0, "Kub 1S91 str"), ["EWR"] = gruppo("EWR", 30000, 0, "55G6 EWR"),
            ["SA-8 Dietro"] = gruppo("SA-8 Dietro", 30000, 0, "Osa 9A33 ln"),   -- alle spalle di chi lancia da x = 15000 verso -x
            ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000, "tipo sconosciuto"),   -- blu, davanti al lanciatore blu
-           ["AWACS Blu"] = gruppo("AWACS Blu", 60000, 60000, "E-2C") }          -- profilo E-2C: passa 0.70, +20 s
+           ["AWACS Blu"] = gruppo("AWACS Blu", 60000, 60000, "E-2C"),           -- profilo E-2C: passa 0.70, +20 s
+           ["SA-6 Tardi"] = gruppo("SA-6 Tardi", 0, 20000, "Kub 1S91 str") }    -- attivazione ritardata
+CREA_GRUPPO = gruppo   -- per la prova dei gruppi creati durante la missione
 
 Group.getByName = function(n) return GRUPPI[n] end
 IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobile = true },
-                                 ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000, p_harm = 0.9 } },
+                                 ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000, p_harm = 0.9 },
+                                 ["SA-6 Tardi"] = { tipo = "sa6", portata = 25000 },     -- attivazione ritardata
+                                 ["SA-3 Nuovo"] = { tipo = "sa3", portata = 22000 } },   -- creato durante la missione
                          sensori = { ["EWR"] = "radar" } },
                [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } },
                        sensori = { ["AWACS Blu"] = "awacs" } } }
@@ -95,6 +103,24 @@ assert (val('S[1].batterie["SA-8 Dietro"].p_harm'), val('S[1].batterie["SA-8 Die
     'SA-8: p_harm dalla configurazione, p_vicine dalla tabella'
 assert (val('S[2].batterie["Hawk Blu"].p_harm'), val('S[2].batterie["Hawk Blu"].p_vicine')) == (0.65, 0.3), 'tipo sconosciuto: riserva'
 assert (val('S[1].sensori["EWR"].p_passa'), val('S[1].sensori["EWR"].ritardo')) == (1.0, 0), 'EWR: profilo 55G6'
+# 13) gruppi non ancora presenti all'avvio
+passo(20)
+assert val('S[1].batteriaPersa') is None, 'un gruppo non ancora presente non e\' una batteria distrutta'
+assert val('S[1].batterie["SA-6 Tardi"]') is not None and val('S[1].batterie["SA-3 Nuovo"]') is not None, \
+    'i gruppi non ancora presenti restano nella configurazione, in attesa'
+assert allarme("SA-6 Tardi") is None, 'gruppo non attivo: lo script non lo tocca'
+# attivazione ritardata: l'evento di nascita lo fa entrare subito nella rete, a radar spento
+L.execute('''
+STATO.attivo["SA-6 Tardi"] = true
+for _, h in ipairs(MOCK.handlers) do h:onEvent({ id = world.event.S_EVENT_BIRTH, initiator = GRUPPI["SA-6 Tardi"]:getUnit(1) }) end
+''')
+assert allarme("SA-6 Tardi") == VERDE, 'attivato: entra nella rete a radar spento'
+assert (val('S[1].batterie["SA-6 Tardi"].p_harm')) == 0.60, 'attivato: profilo Kub risolto all\'ingresso'
+# creato durante la missione, senza evento: entra al ciclo successivo
+L.execute('GRUPPI["SA-3 Nuovo"] = CREA_GRUPPO("SA-3 Nuovo", -60000, 0, "snr s-125 tr"); STATO.vivi["SA-3 Nuovo"] = true')
+passo(10)
+assert allarme("SA-3 Nuovo") == VERDE, 'creato: entra nella rete a radar spento'
+assert val('S[1].batteriaPersa') is None
 # 7) solo armi rilevate: nessuna accensione
 L.execute('RILEVA["EWR"] = { HARM_VOLO, PROIETTILE }')
 passo(40)
@@ -193,4 +219,11 @@ passo(40)
 L.execute('RILEVA["AWACS Blu"] = { MIG }')                   # ritrovato: nuovo sorteggio, riesce
 passo(60)
 assert allarme("Hawk Blu") == ROSSO, 'contatto ritrovato dopo 30 s: nuovo sorteggio'
+# 13, segue) distrutto: esce dalla rete e sveglia le riserve; ricreato con lo stesso nome: rientra
+L.execute('STATO.vivi["SA-3 Nuovo"] = false')
+passo(10)
+assert val('S[1].batteriaPersa') == True, 'batteria distrutta: la rete la perde'
+L.execute('STATO.allarme["SA-3 Nuovo"] = nil; STATO.vivi["SA-3 Nuovo"] = true')
+passo(10)
+assert allarme("SA-3 Nuovo") == VERDE, 'ricreato con lo stesso nome: rientra nella rete a radar spento'
 print('OK')
