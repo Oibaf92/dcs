@@ -17,13 +17,15 @@ Come funziona il codice internamente (stato, ciclo, eventi, prova): [DOCUMENTAZI
   visto e non fa accendere niente.
 - **Ritardi.** L'allarme arriva alla batteria dopo 8 s, più il ritardo del sensore che l'ha visto.
   Ogni tipo di radar ha il suo profilo (vedi "Profili per tipo di radar"): un vecchio P-19 aggiunge
-  4 s; un E-2C passa il 70% delle tracce, con 20 s in più.
+  4 s; un E-2C passa il 70% dei contatti, con 20 s in più. Il sorteggio è uno per contatto: un
+  aereo che l'AWACS non passa resta ignoto alla rete finché l'AWACS lo segue, e viene sorteggiato
+  di nuovo solo se l'AWACS lo perde per più di 30 s e poi lo ritrova.
 - **Guida dei missili.** Dopo un lancio il radar resta acceso per il tempo di guida del sistema
   (SA-2 90 s, SA-3 60, SA-5 180, SA-6 60, SA-8 30, Hawk 60): niente missili persi perché la
   batteria si è spenta da sola.
 - **Missili antiradar.** Quando viene lanciato un antiradar (AGM-88, AGM-45, AGM-122, Kh-58,
   Kh-25MP), la rete reagisce solo se in quel momento un suo radar vede l'aereo che lancia: un EWR,
-  un SAM acceso o un AWACS (che passa l'informazione con probabilità 70%); gli osservatori a vista
+  un SAM acceso o un AWACS (se passa quel contatto alla rete, vedi "Ritardi"); gli osservatori a vista
   non contano. Chi lancia basso dietro il rilievo o fuori copertura non provoca reazioni. Spengono il
   radar dopo 3-8 s le batterie minacciate: quella bersaglio e quelle accese entro 100 km davanti al
   lanciatore (±45° dalla prua), con una probabilità che dipende dal tipo di SAM (per esempio SA-2

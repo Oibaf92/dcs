@@ -10,7 +10,9 @@
 9) HARM senza bersaglio noto da un aereo visto -> si spegne la batteria davanti al lanciatore, non quella
    alle sue spalle, e mai le batterie della coalizione che lancia;
 10) profili per tipo di unita' DCS: valore dalla tabella, dalla configurazione del gruppo, di riserva;
-11) l'SA-6 spara di nuovo prima dello spostamento -> si sposta solo quando ha finito di guidare."""
+11) l'SA-6 spara di nuovo prima dello spostamento -> si sposta solo quando ha finito di guidare;
+12) AWACS: un solo sorteggio per contatto. Un contatto non passato resta non passato finche' l'AWACS
+    lo segue; perso per piu' di 30 s e ritrovato, viene sorteggiato di nuovo."""
 import os
 from lupa import lua51
 
@@ -23,18 +25,20 @@ Controller = { Detection = { VISUAL = 1, OPTIC = 2, RADAR = 4 } }
 AI = { Option = { Ground = { id = { ALARM_STATE = 9 }, val = { ALARM_STATE = { AUTO = 0, GREEN = 1, RED = 2 } } } } }
 land.SurfaceType = { LAND = 1, SHALLOW_WATER = 2, WATER = 3, ROAD = 4, RUNWAY = 5 }
 land.getSurfaceType = function() return 1 end
-STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true, ["SA-8 Dietro"] = true, ["Hawk Blu"] = true } }
+STATO = { allarme = {}, compiti = {}, vivi = { ["SA-6 X"] = true, ["EWR"] = true, ["SA-8 Dietro"] = true, ["Hawk Blu"] = true,
+                                             ["AWACS Blu"] = true } }
 RILEVA = {}          -- RILEVA[nome sensore] = lista di oggetti rilevati
-local function aereo(nome, x, z)
+local function aereo(nome, x, z, coal)
   return { getName = function() return nome end, isExist = function() return true end,
            getPosition = function() return { x = { x = -1, y = 0, z = 0 } } end,
-           getCategory = function() return Object.Category.UNIT end, getCoalition = function() return 2 end, getDesc = function() return { category = 0 } end,
+           getCategory = function() return Object.Category.UNIT end, getCoalition = function() return coal or 2 end, getDesc = function() return { category = 0 } end,
            getPoint = function() return { x = x, y = 1000, z = z } end }
 end
 F18 = aereo("F18", 15000, 0)
 BASSO = aereo("BASSO", 5000, 0)
 LONTANO = aereo("LONTANO", 80000, 0)
 INVISIBILE = aereo("INVISIBILE", 15000, 0)   -- nessun radar della rete lo vede
+MIG = aereo("MIG", 8000, 1000, 1)              -- rosso, vicino all'Hawk blu
 -- armi rilevate: per un'arma getDesc().category e' Weapon.Category (MISSILE = 1, SHELL = 0)
 local function arma(nome, cat, x, z)
   return { getName = function() return nome end, isExist = function() return true end,
@@ -58,14 +62,17 @@ local function gruppo(nome, x, z, tipo)
 end
 GRUPPI = { ["SA-6 X"] = gruppo("SA-6 X", 0, 0, "Kub 1S91 str"), ["EWR"] = gruppo("EWR", 30000, 0, "55G6 EWR"),
            ["SA-8 Dietro"] = gruppo("SA-8 Dietro", 30000, 0, "Osa 9A33 ln"),   -- alle spalle di chi lancia da x = 15000 verso -x
-           ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000, "tipo sconosciuto") }  -- blu, davanti al lanciatore blu
+           ["Hawk Blu"] = gruppo("Hawk Blu", 5000, 1000, "tipo sconosciuto"),   -- blu, davanti al lanciatore blu
+           ["AWACS Blu"] = gruppo("AWACS Blu", 60000, 60000, "E-2C") }          -- profilo E-2C: passa 0.70, +20 s
 
 Group.getByName = function(n) return GRUPPI[n] end
 IADS_DATI = { [1] = { sam = { ["SA-6 X"] = { tipo = "sa6", portata = 25000, mobile = true },
                                  ["SA-8 Dietro"] = { tipo = "sa8", portata = 10000, p_harm = 0.9 } },
                          sensori = { ["EWR"] = "radar" } },
-               [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } } } }
-math.random = function(a, b) if a then return a end return 0.1 end    -- deterministico
+               [2] = { sam = { ["Hawk Blu"] = { tipo = "hawk", portata = 35000 } },
+                       sensori = { ["AWACS Blu"] = "awacs" } } }
+CASUALE = 0.1   -- valore restituito da math.random(): deterministico, regolabile dalla prova
+math.random = function(a, b) if a then return a end return CASUALE end
 ''')
 L.execute(open(os.path.join(QUI, "..", "iads.lua"), encoding="utf-8").read().replace("local S = {}", "S = {}"))
 ROSSO, VERDE = 2, 1
@@ -174,4 +181,16 @@ for _ in range(60):
     cambi.append(allarme())
 assert ROSSO in cambi and VERDE in cambi, 'rete cieca: deve accendersi per brevi ricerche'
 print('ricerca autonoma: acceso %d cicli su 60' % cambi.count(ROSSO))
+# 12) AWACS E-2C (passa 0.70): un solo sorteggio per contatto
+assert allarme("Hawk Blu") == VERDE
+L.execute('CASUALE = 0.9; RILEVA["AWACS Blu"] = { MIG }')   # primo contatto: sorteggio fallito
+passo(10)
+L.execute('CASUALE = 0.1')                                   # i sorteggi successivi riuscirebbero
+passo(60)
+assert allarme("Hawk Blu") == VERDE, 'contatto non passato: non deve passare ai cicli successivi'
+L.execute('RILEVA["AWACS Blu"] = {}')                        # l'AWACS perde il contatto
+passo(40)
+L.execute('RILEVA["AWACS Blu"] = { MIG }')                   # ritrovato: nuovo sorteggio, riesce
+passo(60)
+assert allarme("Hawk Blu") == ROSSO, 'contatto ritrovato dopo 30 s: nuovo sorteggio'
 print('OK')

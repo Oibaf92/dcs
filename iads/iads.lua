@@ -146,9 +146,22 @@ end
 ------------------------------------------------------------------------
 -- Sensori della rete: solo bersagli realmente rilevati
 ------------------------------------------------------------------------
+-- il sensore passa alla rete questo contatto? Un solo sorteggio (p_passa) per contatto, valido
+-- finche' il sensore continua a vederlo; perso per piu' di 3 * CICLO, al ritorno si sorteggia di nuovo
+local function passa(s, id, ora)
+  if s.p_passa >= 1 then return true end
+  local e = s.esiti[id]
+  if not e or ora - e.visto > 3 * CICLO then
+    e = { passa = math.random() < s.p_passa }
+    s.esiti[id] = e
+  end
+  e.visto = ora
+  return e.passa
+end
+
 local function raccogliTracce(coal, st, ora)
   local nemico = (coal == 1) and 2 or 1
-  local function aggiungi(obj, ritardo)
+  local function aggiungi(obj, ritardo, sensore)
     if not obj or not obj.isExist or not obj:isExist() then return end
     -- solo unita': getDetectedTargets puo' restituire anche armi (missili, proiettili), e per
     -- un'arma getDesc().category usa Weapon.Category (MISSILE = 1 come HELICOPTER, SHELL = 0 come AIRPLANE)
@@ -158,8 +171,9 @@ local function raccogliTracce(coal, st, ora)
     if not ok or c ~= nemico then return end
     local okc, cat = pcall(function() return obj:getDesc().category end)
     if not okc or (cat ~= Unit.Category.AIRPLANE and cat ~= Unit.Category.HELICOPTER) then return end
-    local p = obj:getPoint()
     local id = obj:getName()
+    if sensore and not passa(sensore, id, ora) then return end
+    local p = obj:getPoint()
     local t = st.tracce[id]
     local pronto = ora + ritardo
     if t and t.pronto < pronto then pronto = t.pronto end
@@ -184,8 +198,8 @@ local function raccogliTracce(coal, st, ora)
           for _, r in pairs(rilevati) do
             if ruolo == "vista" then
               aggiungi(r.object, RITARDO_RETE)
-            elseif math.random() < s.p_passa then
-              aggiungi(r.object, RITARDO_RETE + s.ritardo)
+            else
+              aggiungi(r.object, RITARDO_RETE + s.ritardo, s)
             end
           end
         end
@@ -205,9 +219,14 @@ local function raccogliTracce(coal, st, ora)
       end
     end
   end
-  -- tracce vecchie
+  -- tracce vecchie e sorteggi dei contatti persi
   for id, t in pairs(st.tracce) do
     if ora - t.visto > 3 * CICLO then st.tracce[id] = nil end
+  end
+  for _, s in pairs(st.sensori) do
+    for id, e in pairs(s.esiti) do
+      if ora - e.visto > 3 * CICLO then s.esiti[id] = nil end
+    end
   end
   st.sensoriVivi = quanti
 end
@@ -279,7 +298,7 @@ local function silenzio(nome, b, ora)
 end
 
 -- la rete della coalizione coal vede l'oggetto in questo istante? Solo radar: EWR ("radar") e AWACS,
--- che passano l'informazione con la probabilita' del loro profilo, e SAM accesi; le unita' "vista" no.
+-- se passano quel contatto alla rete (passa), e SAM accesi; le unita' "vista" no.
 local function reteVede(coal, obj)
   local function vede(nome)
     local g = gruppoVivo(nome)
@@ -294,7 +313,11 @@ local function reteVede(coal, obj)
     if s.ruolo ~= "vista" then
       local g = gruppoVivo(nome)
       if g then profiloSensore(nome, s, g) end
-      if g and vede(nome) and math.random() < s.p_passa then return true end
+      -- stesso sorteggio della traccia: se il sensore non passa quel contatto, non passa neanche il lancio
+      if g and vede(nome) then
+        local okn, id = pcall(function() return obj:getName() end)
+        if okn and id and passa(s, id, timer.getTime()) then return true end
+      end
     end
   end
   for nome, b in pairs(S[coal].batterie) do
@@ -433,7 +456,7 @@ for coal, d in pairs(DATI) do
   -- sensori: "ruolo" oppure { ruolo = "...", p_passa = ..., ritardo = ... }
   for nome, v in pairs(d.sensori or {}) do
     local cfg = (type(v) == "table") and v or { ruolo = v }
-    S[coal].sensori[nome] = { ruolo = cfg.ruolo or "radar", cfg = cfg }
+    S[coal].sensori[nome] = { ruolo = cfg.ruolo or "radar", cfg = cfg, esiti = {} }
   end
   log(string.format("coalizione %d: %d batterie, radar spenti", coal, n))
 end

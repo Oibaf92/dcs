@@ -145,7 +145,8 @@ S[coal] = {
 |---|---|
 | `ruolo` | `radar` (EWR), `awacs` o `vista` (osservatori a terra) |
 | `cfg` | la configurazione originale del sensore |
-| `p_passa`, `ritardo` | probabilità che un rilevamento arrivi alla rete e secondi di ritardo in più; risolti al primo uso (§7) |
+| `p_passa`, `ritardo` | probabilità che un contatto arrivi alla rete e secondi di ritardo in più; risolti al primo uso (§7) |
+| `esiti` | `[nome unità] = { passa, visto }`: esito del sorteggio per ogni contatto e ultimo istante in cui il sensore l'ha visto |
 | `risolto` | il profilo è già stato cercato |
 
 ### Traccia
@@ -174,11 +175,20 @@ batterie una per una.
    - chiede alla **prima unità** del gruppo i bersagli rilevati: `getDetectedTargets(VISUAL, OPTIC)`
      per `vista`, `getDetectedTargets(RADAR)` per gli altri;
    - ogni rilevamento di un sensore `vista` diventa una traccia con ritardo `RITARDO_RETE`;
-   - ogni rilevamento di un sensore radar o AWACS passa con probabilità `p_passa` e diventa una
+   - ogni rilevamento di un sensore radar o AWACS passa se il contatto ha vinto il sorteggio
+     (`passa`, vedi sotto) e diventa una
      traccia con ritardo `RITARDO_RETE + ritardo` del profilo.
 2. **Batterie accese.** Una batteria accesa è anche un sensore: i suoi rilevamenti radar diventano
    tracce con ritardo `RITARDO_RETE`.
-3. **Pulizia.** Le tracce non viste da più di 30 s vengono cancellate.
+3. **Pulizia.** Le tracce non viste da più di 30 s vengono cancellate, e così gli esiti dei
+   sorteggi dei contatti che un sensore non vede da più di 30 s.
+
+**Un sorteggio per contatto (`passa`).** Un sensore con `p_passa` minore di 1 (gli AWACS) sorteggia
+una sola volta se passare alla rete un certo aereo, la prima volta che lo vede, e ricorda l'esito
+in `esiti`. Finché continua a vederlo l'esito resta lo stesso: un contatto non passato resta ignoto
+alla rete, e la probabilità `p_passa` è davvero la frazione di contatti che la rete riceve. Se il
+sensore perde l'aereo per più di `3 * CICLO` (30 s) e poi lo ritrova, è un contatto nuovo e si
+sorteggia di nuovo. Con `p_passa = 1` (gli EWR) il sorteggio non si fa.
 
 Ogni rilevamento passa dal filtro `aggiungi`, che scarta:
 
@@ -251,7 +261,8 @@ Un'arma è un antiradar se il suo nome di tipo contiene una delle parole di `ANT
 2. **Quali reti reagiscono.** Solo quelle delle coalizioni diverse da quella del lanciatore, e solo
    se **in quel momento** un loro radar vede il lanciatore (`reteVede`):
    - EWR e AWACS configurati: `isTargetDetected(lanciatore, RADAR)` deve dire rilevato *e* visibile,
-     poi il dato passa con la probabilità `p_passa` del sensore;
+     e il sensore deve passare quel contatto alla rete. Vale lo stesso esito del sorteggio usato per
+     le tracce (`passa`): un AWACS che non passa la traccia di un aereo non passa neanche il suo lancio;
    - batterie accese: stesso controllo, senza sorteggio;
    - i sensori `vista` non contano.
 3. **Quali batterie sono minacciate.** Tra le batterie accese di quella rete:
@@ -321,7 +332,8 @@ Esempio: un aereo entra nella portata di un SA-6 ed è visto da un EWR 55G6 (rit
 | t + 10…20 s | al ciclo dopo la traccia è pronta e il radar si accende |
 
 In pratica la batteria si accende fra 10 e 20 s dopo il primo rilevamento; con un AWACS E-2C
-(+20 s, e solo il 70% dei rilevamenti a ogni ciclo) fra 30 e 50 s o più. Il radar resta acceso
+(+20 s) fra 30 e 50 s, e solo per il 70% dei contatti: il restante 30% la rete non lo riceve finché
+l'AWACS lo segue. Il radar resta acceso
 almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida dopo un lancio.
 
 | Costante | Valore | Dove agisce |
@@ -366,8 +378,9 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
    istante, come fa DCS;
 2. definisce gruppi, unità e aerei finti. `RILEVA[nome sensore]` è la lista di ciò che quel sensore
    "vede"; `STATO.allarme[gruppo]` registra l'ultimo stato di allarme impostato dallo script;
-3. rende `math.random` deterministico (restituisce sempre il minimo, o 0.1): ogni sorteggio con
-   probabilità superiore a 0.1 riesce;
+3. rende `math.random` deterministico (restituisce sempre il minimo, o il valore della variabile
+   `CASUALE`, di solito 0.1): ogni sorteggio con probabilità superiore a 0.1 riesce. Il caso 12
+   cambia `CASUALE` per far fallire un sorteggio;
 4. carica `iads.lua` rendendo globale la tabella `S`, così la prova può leggerne e modificarne lo
    stato;
 5. fa avanzare il tempo a passi di 1 s e controlla gli scenari:
@@ -384,6 +397,7 @@ almeno 45 s dopo l'ultimo bersaglio in portata, e almeno per il tempo di guida d
 | 9 | HARM senza bersaglio noto | si spegne la batteria davanti al lanciatore, non quella alle spalle né quella amica del lanciatore |
 | 5, 11 | la batteria spara, poi spara di nuovo prima dello spostamento | si sposta a radar spento, ma solo quando ha finito di guidare |
 | 6 | EWR distrutto | ricerca autonoma periodica |
+| 12 | AWACS E-2C: primo sorteggio fallito, poi contatto perso e ritrovato | il contatto non passa finché l'AWACS lo segue; ritrovato dopo 30 s, nuovo sorteggio |
 
 ```bash
 pip install lupa
@@ -400,9 +414,6 @@ vanno verificati in gioco.
 
 Emersi dall'analisi del codice e non ancora corretti:
 
-- **Il sorteggio AWACS si ripete a ogni ciclo.** Con `p_passa = 0.7` una traccia ha il 70% di
-  probabilità di passare *a ogni ciclo*, quindi in pochi cicli passa quasi sempre: la probabilità
-  agisce più come un ritardo in più che come una perdita di tracce.
 - **Gruppi ad attivazione ritardata o creati durante la missione.** Al primo ciclo risultano
   distrutti: escono dalla rete e attivano le riserve.
 - **Rete cieca.** Una configurazione senza sensori è cieca fin dall'inizio; e tutte le batterie
