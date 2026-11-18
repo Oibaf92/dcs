@@ -2,44 +2,53 @@
 
 ## `Test_siria.miz`
 
-Missione di prova sulla mappa Siria (1 giugno 1999, 08:00, durata prevista 2 ore). Strike/SEAD blu da Incirlik contro un SA-6 vicino a Raqqa. Il giocatore pilota BUD 1-1 (F-15E).
+Missione di prova sulla mappa Siria (1 giugno 1999, 08:00, durata prevista 2 ore).
+
+**Blu**
+- Strike/SEAD da Incirlik contro il settore del SA-6 vicino a Raqqa.
+- Il giocatore pilota BUD 1-1 (F-15E).
+- Un E-3A (`Aerial-1`) orbita sopra la Turchia meridionale.
+
+**Rosso**, a sud e a ovest del **FLOT**, la linea tratteggiata "FLOT" nel livello Author dell'editor:
+- SA-6 `SAM_RED-SA-6-1`;
+- tre EWR 55G6;
+- artiglieria Msta con supporto e 2S6 Tunguska vicino al SA-6;
+- sei voli CAP.
 
 ### Pattuglie rosse (CAP)
 
-Il rosso difende il nord della Siria **senza sapere da dove arriverà il nemico**. L'area delle operazioni è il poligono disegnato nell'editor (Polygon-3, livello Author). I vertici sono stimati da uno screenshot con un errore di circa 10 km: 36,55N 37,15E · 36,57N 39,30E · 35,75N 40,10E · 35,10N 39,20E · 34,95N 37,05E · 34,75N 36,40E · 35,70N 36,10E. Le pattuglie seguono un copione fisso di priorità che cambiano, come se arrivassero segnalazioni diverse durante la missione. Ogni cambio turno va in un'area diversa.
+Il rosso difende il fronte **senza sapere da dove attaccherà il nemico**. Le pattuglie seguono un copione fisso di priorità che cambiano, e ogni cambio turno va in un settore diverso.
 
-- **Pattuglie attive:** dal minuto 22 ci sono sempre 2–3 pattuglie in zona (tra WP3 e WP5), in media 2,2. Nei primi 20 minuti la copertura cresce, perché gli aerei partono da fermi.
-- **Inizio ricerca (WP3):** 100 km prima del circuito, lungo la rotta di arrivo, per ingaggiare già durante l'avvicinamento. Alcuni WP3 cadono sul bordo sud del poligono o appena fuori: la ricerca si attiva prima di entrare nell'area.
-- **Raggio di ingaggio:** Su-27 85 km, MiG-23 55 km.
-- **Velocità in attesa:** Su-27 600 km/h, MiG-23 550 km/h.
+- **Posizione dei circuiti:** tutti dal lato rosso del FLOT, tra 27 e 67 km dietro la linea, dentro l'area delle operazioni. L'area è il poligono disegnato nell'editor, con vertici stimati da uno screenshot (errore di circa 10 km).
+- **Assi dei circuiti:** seguono più o meno l'andamento locale del FLOT, con 10–25° di variazione.
+- **Raggio di ingaggio:** Su-27 75 km, MiG-23 50 km. In questo modo non inseguono oltre circa 25 km al di là della linea.
+- **Inizio ricerca (WP3):** 100 km prima del circuito, lungo la rotta di arrivo.
+- **Pattuglie attive:** dal minuto 22 ci sono sempre almeno 2 pattuglie in zona (tra WP3 e WP5), in media 2,3.
 
-| Area | Centro circuito | Lunghezza |
+| Settore | Centro circuito | Lunghezza |
 |---|---|---|
-| Diga di Tabqa – Raqqa (SA-6) | 35,85N 38,70E | 45 km |
-| Aleppo – Al-Bab | 36,00N 37,35E | 40 km |
-| Manbij – attraversamenti dell'Eufrate | 36,10N 38,05E | 40 km |
-| Tal Abyad – valle del Balikh | 36,05N 39,30E | 45 km |
-| Hama – Idlib, valle dell'Oronte (fianco ovest) | 35,45N 36,80E | 40 km |
-| Eufrate a est di Raqqa (fianco est) | 35,75N 39,50E | 45 km |
+| Raqqa – settore del SA-6 | 35,50N 38,95E | 45 km |
+| Aleppo – fronte di Azaz | 36,25N 37,15E | 40 km |
+| Manbij – ansa dell'Eufrate | 35,85N 37,70E | 40 km |
+| Eufrate a est di Raqqa | 35,38N 39,20E | 45 km |
+| Idlib – fronte dell'Hatay | 35,72N 36,62E | 40 km |
+| Diga di Tabqa | 35,50N 38,40E | 45 km |
 
-I circuiti stanno dentro il poligono, ad almeno 23 km dal bordo.
-
-| Fase | Volo | Aerei | Area | Partenza | Attesa | Quota | Asse circuito | In zona (min, stima) | Abilità |
+| Fase | Volo | Aerei | Settore | Partenza | Attesa | Quota | Asse | In zona (min, stima) | Abilità |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 – allarme generale | RED CAP 1 | 4× Su-27 | Tabqa – Raqqa | 08:00 | 35′ | FL260 | 060°/240° | 21–69 | Excellent, High, High, Good |
-| 1 – allarme generale | RED CAP 2 | 2× MiG-23MLD | Aleppo | 08:00 | 25′ | FL180 | 080°/260° | 20–57 | High, Good |
-| 2 – tracce sul confine nord | RED CAP 3 | 4× MiG-23MLD | Manbij | 08:35 | 22′ | FL210 | 035°/215° | 54–88 | High, Good, Good, Average |
-| 2 – tracce sul confine nord | RED CAP 4 | 2× Su-27 | Tal Abyad | 08:35 | 35′ | FL290 | 115°/295° | 62–109 | High, Good |
-| 3 – segnalazioni sui fianchi | RED CAP 5 | 3× MiG-23MLD | Hama – Idlib | 09:10 | 25′ | FL160 | 160°/340° | 86–123 | Good, Good, Average |
-| 3 – segnalazioni sui fianchi | RED CAP 6 | 3× Su-27 | Eufrate a est di Raqqa | 09:10 | 40′ | FL240 | 020°/200° | 95–148 | High, Good, Average |
+| 1 – allarme generale | RED CAP 1 | 4× Su-27 | Raqqa – SA-6 | 08:00 | 35′ | FL260 | 115°/295° | 21–69 | Excellent, High, High, Good |
+| 1 – allarme generale | RED CAP 2 | 2× MiG-23MLD | Aleppo | 08:00 | 20′ | FL180 | 090°/270° | 22–54 | High, Good |
+| 2 – pressione su Eufrate e fianco est | RED CAP 3 | 4× MiG-23MLD | Manbij | 08:35 | 22′ | FL210 | 038°/218° | 52–86 | High, Good, Good, Average |
+| 2 – pressione su Eufrate e fianco est | RED CAP 4 | 2× Su-27 | Eufrate a est di Raqqa | 08:35 | 35′ | FL290 | 080°/260° | 56–104 | High, Good |
+| 3 – fronte ovest e diga | RED CAP 5 | 3× MiG-23MLD | Idlib | 09:05 | 25′ | FL160 | 110°/290° | 83–121 | Good, Good, Average |
+| 3 – fronte ovest e diga | RED CAP 6 | 3× Su-27 | Tabqa | 09:05 | 40′ | FL240 | 095°/275° | 84–136 | High, Good, Average |
 
-I Su-27 partono da Al-Dumayr e i MiG-23 da Sayqal. Le aree più a est sono assegnate ai Su-27, perché un MiG-23 laggiù avrebbe poco carburante per l'attesa.
+I Su-27 partono da Al-Dumayr e i MiG-23 da Sayqal. Le durate dei MiG-23 sono tenute sotto il carburante utile stimato (circa 27 minuti su Aleppo).
 
-Cosa è stato modificato:
+Cosa è stato modificato sui voli:
 
 - **Voli esistenti** RED CAP 1 e 2: WP3–WP5, il raggio di ingaggio, il circuito (quota, velocità, durata), l'orario di partenza, le abilità e il numero di aerei.
-- **Voli nuovi** RED CAP 3–6: copie dei due voli esistenti, con lo stesso decollo, trasferimento, rientro, carico e livrea. Cambiano solo le stesse voci.
-- Il resto della missione è identico all'originale.
+- **Voli nuovi** RED CAP 3–6: copie dei due voli esistenti, con lo stesso decollo, trasferimento, rientro, carico e livrea.
 
 Parcheggi:
 
@@ -48,8 +57,25 @@ Parcheggi:
 | Al-Dumayr | 63/56, 64/7, 65/19, 66/50 |
 | Sayqal | 53/1, 52/3, 51/6, 50/5 |
 
-- Sono posti della stessa fila. Indici e coordinate vengono dai dati della mappa Siria della libreria `pydcs`, che coincidono esattamente con i posti già usati nella missione originale.
-- I voli della stessa base partono ad almeno 35 minuti di distanza, quindi riusano gli stessi posti quando il volo precedente è già partito.
+- Indici e coordinate vengono dai dati della mappa Siria della libreria `pydcs`, verificati sui posti già usati nella missione originale.
+- I voli della stessa base partono ad almeno 30 minuti di distanza e riusano gli stessi posti.
+
+### IADS
+
+La missione carica lo script [`iads/iads.lua`](../iads/README.md) con la configurazione [`Test_siria_iads_config.lua`](Test_siria_iads_config.lua). Entrambi i file sono incorporati nel `.miz` e caricati dal trigger **MISSION START** chiamato "IADS", prima la configurazione e poi lo script.
+
+| Ruolo | Gruppo | Note |
+|---|---|---|
+| SAM | `SAM_RED-SA-6-1` | SA-6, portata 25 km, mobile: si sposta dopo il tiro |
+| Sensore radar | `RED_EWR-1` | 55G6, Tabqa |
+| Sensore radar | `RED_EWR-2` | 55G6, Manbij |
+| Sensore radar | `RED_EWR-3` | 55G6, Al-Bab |
+
+- **Radar del SA-6:** resta spento finché un EWR non vede un bersaglio entro l'85% della sua portata.
+- **EWR distrutti:** se cadono tutti, il SA-6 fa brevi ricerche con il proprio radar.
+- **Tunguska (`RED_AAA-1`):** non è nella rete e resta autonoma come difesa ravvicinata.
+- **`IADS_DEBUG = true`:** mostra a schermo ogni accensione e spegnimento. Per il gioco va messo a `false`.
+- **Se modifichi `iads.lua` o la configurazione:** va aggiornata la copia dentro il `.miz`. Il modo più semplice è ricaricare il file nell'azione DO SCRIPT FILE del trigger.
 
 Note:
 
